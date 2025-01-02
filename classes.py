@@ -35,24 +35,9 @@ class Deck:
     def shuffle(self):
         random.shuffle(self.employees)
 
-class BuildingCard:
-    def __init__(self, type):
-        if type in ['factory','office','warehouse']:
-            self.type = type
-        self.cost = 2
-        self.production = 0
-        self.storage = 0
-        self.desks = 0
-        if type == 'factory':
-            self.production = 3
-        elif type == 'warehouse':
-            self.storage = 4
-        elif type == 'office':
-            self.desks = 3
-        self.attributes = {'production': self.production, 'storage': self.storage, 'desks': self.desks}
-            
-    def __init__(self, production = 0, storage = 0, desks = 0):
-        self.cost = (production + storage + desks) * 2 / 3
+class BuildingCard:       
+    def __init__(self, production = 0, storage = 0, desks = 0, cost = 2):
+        self.cost = cost
         self.production = production
         self.storage = storage
         self.desks = desks
@@ -77,28 +62,9 @@ class BuildingCard:
     def __str__(self):
         return 'building, type: ' + self.type + ', cost: ' + str(self.cost) + ', production: ' + str(self.production) + ', storage: ' + str(self.storage) + ', desks: ' + str(self.desks)
 class EmployeeCard:
-    def __init__(self, department):
+    def __init__(self, operations = 0, finance = 0, engineering = 0, marketing = 0, cost = 1):
         self.name = self.random_name()
-        if department in ['operations','finance','engineering','marketing']:
-            self.department = department
-        self.cost = 1
-        self.operations = 0
-        self.finance = 0
-        self.engineering = 0
-        self.marketing = 0
-        if department == 'operations':
-            self.operations = 1
-        elif department == 'finance':
-            self.finance = 1
-        elif department == 'engineering':    
-            self.engineering = 1
-        elif department == 'marketing':
-            self.marketing = 1
-        self.attributes = {'operations': self.operations, 'finance': self.finance, 'engineering': self.engineering, 'marketing': self.marketing}
-
-    def __init__(self, operations = 0, finance = 0, engineering = 0, marketing = 0):
-        self.name = self.random_name()
-        self.cost = operations + finance + engineering + marketing
+        self.cost = cost
         self.operations = operations
         self.finance = finance
         self.engineering = engineering
@@ -156,20 +122,22 @@ class Company:
     def analyse_game_state(self, game_state, debug = 0):
         ops_emp, fin_emp, eng_emp, mkt_emp, no_off, no_fac, sel_prc = game_state
         emps_cards, buds_cards = [], []
+        base_emp_val = self.game_settings.base_emp_value
+        base_emp_cost = self.game_settings.base_emp_cost
+        base_bud_val = self.game_settings.base_bud_value
+        base_bud_cost = self.game_settings.base_bud_cost
         for i in range(ops_emp):
-            emps_cards.append(EmployeeCard(1, 0, 0, 0))
+            emps_cards.append(EmployeeCard(base_emp_val, 0, 0, 0, base_emp_cost))
         for i in range(fin_emp):
-            emps_cards.append(EmployeeCard(0, 1, 0, 0))
+            emps_cards.append(EmployeeCard(0, base_emp_val, 0, 0, base_emp_cost))
         for i in range(eng_emp):
-            emps_cards.append(EmployeeCard(0, 0, 1, 0))
+            emps_cards.append(EmployeeCard(0, 0, base_emp_val, 0, base_emp_cost))
         for i in range(mkt_emp):
-            emps_cards.append(EmployeeCard(0, 0, 0, 1))
+            emps_cards.append(EmployeeCard(0, 0, 0, base_emp_val, base_emp_cost))
         for i in range(no_fac):
-            production = self.game_settings.production_per_factory
-            buds_cards.append(BuildingCard(production, 0, 0))
+            buds_cards.append(BuildingCard(base_bud_val, 0, 0, base_bud_cost))
         for i in range(no_off):
-            desks = self.game_settings.desks_per_office
-            buds_cards.append(BuildingCard(0, 0, desks))
+            buds_cards.append(BuildingCard(0, 0, base_bud_val, base_bud_cost))
         net = self.calculate_net(emps_cards, buds_cards, sel_prc, None, debug)
         return net
 
@@ -247,43 +215,44 @@ class Company:
         actual_gross = min([potential_gross, max_gross])
         net = actual_gross - total_cost
         if debug:
-            print('A, employee attributes: operations: ' + str(operations) + ', engineering: ' + str(engineering) + ', finance: ' + str(finance) + ', marketing: ' + str(marketing))
-            print('B, building attributes: production: ' + str(production) + ', storage: ' + str(storage) + ', desks: ' + str(desks) + ', max buildings: ' + str(max_buildings))
-            print('C, unit cost: ' + str(unit_cost) + ', brand demand: ' + str(brand) + ', price demand: ' + str(price_demand) + ', demand strength: ' + str(demand_str) + ', actual demand: ' + str(actual_demand)) 
-            print('D, potential gross: ' + str(potential_gross)  + ', max gross: ' + str(max_gross) + ', actual gross: ' + str(actual_gross) + ', total cost: ' + str(total_cost) +  ', net: ' + str(net))
+            print('A, employees: ' + str(len(employees)) + '/' + str(desks) + ', operations: ' + str(operations) + ', engineering: ' + str(engineering) + ', finance: ' + str(finance) + ', marketing: ' + str(marketing))
+            print('B, buildings: ' + str(len(buildings)) + '/' + str(max_buildings) + ', production: ' + str(production) + ', desks: ' + str(desks))
+            print('C, price: ' + str(price) + ', price demand: ' + str(price_demand) + ', brand demand: ' + str(brand) + ', demand strength: ' + str(demand_str) + ', actual demand: ' + str(actual_demand))
+            print('D, unit cost: ' + str(unit_cost) + ', unit profit: ' + str(unit_profit) + ', units sold: ' + str(units_sold))
+            print('E, gross income: ' + str(potential_gross) + '/' + str(max_gross) + ', actual gross: ' + str(actual_gross) + ', total cost: ' + str(total_cost) +  ', net: ' + str(net))
             
         return True, net
 class GameSettings:
     def __init__(self, 
-                 no_emp_cards_in_pool,
-                 no_emp_cards_per_attr, 
-                 no_bud_cards_in_pool,
-                 no_bud_cards_per_attr,
-                 desks_per_office,
-                 production_per_factory,
-                 cost_per_office,
-                 cost_per_factory,
-                 starting_capital,
+                 base_emp_value,
+                 base_emp_cost,
+                 base_bud_value,
+                 base_bud_cost,
                  engineering_to_unit_cost,
                  marketing_to_brand,
                  finance_to_max_gross,
                  operations_to_max_buildings,
-                 price_to_demand
+                 price_to_demand,
+                 starting_capital = 10,
+                 no_emp_cards_in_pool = 8,
+                 no_emp_cards_per_attr = 16, 
+                 no_bud_cards_in_pool = 4,
+                 no_bud_cards_per_attr = 8
                  ):
+        self.base_emp_value = base_emp_value
+        self.base_emp_cost = base_emp_cost
+        self.base_bud_value = base_bud_value
+        self.base_bud_cost = base_bud_cost
         self.no_emp_cards_in_pool = no_emp_cards_in_pool
         self.no_emp_cards_per_attr = no_emp_cards_per_attr
         self.no_bud_cards_in_pool = no_bud_cards_in_pool
         self.no_bud_cards_per_attr = no_bud_cards_per_attr
-        self.desks_per_office = desks_per_office
-        self.production_per_factory = production_per_factory
-        self.cost_per_office = cost_per_office
-        self.cost_per_factory = cost_per_factory
         self.starting_capital = starting_capital
         self.engineering_to_unit_cost = engineering_to_unit_cost
         self.marketing_to_brand = marketing_to_brand
         self.finance_to_max_gross = finance_to_max_gross
         self.operations_to_max_buildings = operations_to_max_buildings
-        self.price_to_demand = price_to_demand
+        self.price_to_demand = price_to_demand     
 class Player:
     def __init__(self, game_settings):
         self.no_emp_cards_in_pool = game_settings.no_emp_cards_in_pool
@@ -300,7 +269,6 @@ class Player:
             attributes.append(attribute)
         
         card_attribute_count = {}
-        cards = copy.deepcopy(available_cards)
         for card in available_cards:
             key = []
             for attribute in attributes:
@@ -362,7 +330,7 @@ class Player:
         return res
     
     def generate_game_states(self, game_settings, company, iterations = 100, debug = 0):
-        desks_per_office = game_settings.desks_per_office
+        desks_per_office = game_settings.base_bud_value
 
         ops_emp_ls = list(game_settings.operations_to_max_buildings.keys())
         max_fin = max(list(game_settings.finance_to_max_gross.keys()))
@@ -371,8 +339,8 @@ class Player:
 
         res, x, y = {}, 0, 0
         # set up lists for each attribute
-        ops_ls, fin_ls, eng_ls, mkt_ls, off_ls, fac_ls, prc_ls, cst_ls, net_ls = [], [], [], [], [], [], [], [], []
-        while x < iterations and y < 1000:
+        row_keys, ops_ls, fin_ls, eng_ls, mkt_ls, off_ls, fac_ls, prc_ls, cst_ls, net_ls = [], [], [], [], [], [], [], [], [], []
+        while x < iterations and y < 50000:
 
             # choose random number of ops employees
             ops_emp = random.choice(ops_emp_ls)
@@ -405,6 +373,7 @@ class Player:
             key = tuple(key)
             # build player hand from random combinations
             if key not in res:
+                row_keys.append(key)
                 ops_ls.append(ops_emp)
                 fin_ls.append(fin_emp)
                 eng_ls.append(eng_emp)
@@ -413,24 +382,7 @@ class Player:
                 fac_ls.append(no_fac)
                 prc_ls.append(sel_prc)
                 cst_ls.append(unit_cost)
-
-                emps_cards, buds_cards = [], []
-                for i in range(ops_emp):
-                    emps_cards.append(EmployeeCard(1, 0, 0, 0))
-                for i in range(fin_emp):
-                    emps_cards.append(EmployeeCard(0, 1, 0, 0))
-                for i in range(eng_emp):
-                    emps_cards.append(EmployeeCard(0, 0, 1, 0))
-                for i in range(mkt_emp):
-                    emps_cards.append(EmployeeCard(0, 0, 0, 1))
-                for i in range(no_fac):
-                    production = game_settings.production_per_factory
-                    buds_cards.append(BuildingCard(production, 0, 0))
-                for i in range(no_off):
-                    desks = game_settings.desks_per_office
-                    buds_cards.append(BuildingCard(0, 0, desks))
-
-                net = company.calculate_net(emps_cards, buds_cards, sel_prc, debug)
+                net = company.analyse_game_state(key, debug)
                 net_ls.append(net[1])
                 res[key] = net
                 if debug > 1:
@@ -442,7 +394,7 @@ class Player:
             y += 1
         
         # create pandas dataframe
-        df = pd.DataFrame({'operations': ops_ls, 'finance': fin_ls, 'engineering': eng_ls, 'marketing': mkt_ls, 'offices': off_ls, 'factories': fac_ls, 'unit cost': cst_ls, 'price': prc_ls, 'net': net_ls})
+        df = pd.DataFrame({'key':row_keys, 'operations': ops_ls, 'finance': fin_ls, 'engineering': eng_ls, 'marketing': mkt_ls, 'offices': off_ls, 'factories': fac_ls, 'unit cost': cst_ls, 'price': prc_ls, 'net': net_ls})
         df = df.sort_values(by = 'net', ascending = False)
         return df
 class Game:
@@ -461,8 +413,9 @@ class Game:
         for i in range(self.game_settings.no_emp_cards_per_attr):
             for attribute in ['operations', 'engineering', 'finance', 'marketing']:
                 att_dic = {'operations':0, 'engineering':0, 'finance':0, 'marketing':0}
-                att_dic[attribute] = 1
-                emps.append(EmployeeCard(att_dic['operations'], att_dic['engineering'], att_dic['finance'], att_dic['marketing']))
+                att_dic[attribute] = self.game_settings.base_emp_value
+                cost = self.game_settings.base_emp_cost
+                emps.append(EmployeeCard(att_dic['operations'], att_dic['engineering'], att_dic['finance'], att_dic['marketing'], cost = cost))
         return Deck(emps)
 
     def build_building_deck(self):
@@ -470,11 +423,7 @@ class Game:
         for i in range(self.game_settings.no_bud_cards_per_attr):
             for attribute in ['production', 'storage', 'desks']:
                 att_dic = {'production':0, 'storage':0, 'desks':0}
-                if attribute == 'production':
-                    att_dic['production'] = self.game_settings.production_per_factory
-                elif attribute == 'desks':
-                    att_dic['desks'] = self.game_settings.desks_per_office
-                else:
-                    att_dic[attribute] = 3
-                buds.append(BuildingCard(att_dic['production'], att_dic['storage'], att_dic['desks']))
+                att_dic[attribute] = self.game_settings.base_bud_value
+                cost = self.game_settings.base_bud_cost
+                buds.append(BuildingCard(att_dic['production'], att_dic['storage'], att_dic['desks'], cost=cost))
         return Deck(buds)
