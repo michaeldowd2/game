@@ -394,8 +394,8 @@ class Player:
             y += 1
         
         # create pandas dataframe
-        df = pd.DataFrame({'key':row_keys, 'operations': ops_ls, 'finance': fin_ls, 'engineering': eng_ls, 'marketing': mkt_ls, 'offices': off_ls, 'factories': fac_ls, 'unit cost': cst_ls, 'price': prc_ls, 'net': net_ls})
-        df = df.sort_values(by = 'net', ascending = False)
+        df = pd.DataFrame({'gamestate key':row_keys, 'operations': ops_ls, 'finance': fin_ls, 'engineering': eng_ls, 'marketing': mkt_ls, 'offices': off_ls, 'factories': fac_ls, 'unit cost': cst_ls, 'price': prc_ls, 'net income': net_ls})
+        
         return df
 class Game:
     def __init__(self, game_settings, no_players, debug = 0):
