@@ -121,11 +121,14 @@ class Company:
 
     def analyse_game_state(self, game_state, debug = 0):
         ops_emp, fin_emp, eng_emp, mkt_emp, no_off, no_fac, sel_prc = game_state
-        emps_cards, buds_cards = [], []
         base_emp_val = self.game_settings.base_emp_value
+        ops_emp = int(ops_emp / base_emp_val)
+        fin_emp = int(fin_emp / base_emp_val)
+        eng_emp = int(eng_emp / base_emp_val)
+        mkt_emp = int(mkt_emp / base_emp_val)
+        emps_cards, buds_cards = [], []
+        
         base_emp_cost = self.game_settings.base_emp_cost
-        base_bud_val = self.game_settings.base_bud_value
-        base_bud_cost = self.game_settings.base_bud_cost
         for i in range(ops_emp):
             emps_cards.append(EmployeeCard(base_emp_val, 0, 0, 0, base_emp_cost))
         for i in range(fin_emp):
@@ -135,9 +138,13 @@ class Company:
         for i in range(mkt_emp):
             emps_cards.append(EmployeeCard(0, 0, 0, base_emp_val, base_emp_cost))
         for i in range(no_fac):
-            buds_cards.append(BuildingCard(base_bud_val, 0, 0, base_bud_cost))
+            val = self.game_settings.factory_to_prod
+            cost = self.game_settings.factory_cost
+            buds_cards.append(BuildingCard(val, 0, 0, cost))
         for i in range(no_off):
-            buds_cards.append(BuildingCard(0, 0, base_bud_val, base_bud_cost))
+            val = self.game_settings.office_to_desk
+            cost = self.game_settings.office_cost
+            buds_cards.append(BuildingCard(0, 0, val, cost))
         net = self.calculate_net(emps_cards, buds_cards, sel_prc, None, debug)
         return net
 
@@ -224,15 +231,17 @@ class Company:
         return True, net
 class GameSettings:
     def __init__(self, 
-                 base_emp_value,
-                 base_emp_cost,
-                 base_bud_value,
-                 base_bud_cost,
-                 engineering_to_unit_cost,
-                 marketing_to_brand,
-                 finance_to_max_gross,
-                 operations_to_max_buildings,
-                 price_to_demand,
+                 base_emp_value = 1,
+                 base_emp_cost = 0.5,
+                 factory_to_prod = 4,
+                 factory_cost = 1,
+                 office_to_desk = 4,
+                 office_cost = 1,
+                 engineering_to_unit_cost = {0:5,1:4,2:3,3:2,4:1},
+                 marketing_to_brand = {0:2,1:3,2:4,3:5,4:6},
+                 finance_to_max_gross = {0:4,1:8,2:16,3:24,4:32},
+                 operations_to_max_buildings = {0:2,1:3,2:4,3:5,4:6},
+                 price_to_demand = {1:6,2:5,3:4,4:3,5:2},
                  starting_capital = 10,
                  no_emp_cards_in_pool = 8,
                  no_emp_cards_per_attr = 16, 
@@ -241,8 +250,10 @@ class GameSettings:
                  ):
         self.base_emp_value = base_emp_value
         self.base_emp_cost = base_emp_cost
-        self.base_bud_value = base_bud_value
-        self.base_bud_cost = base_bud_cost
+        self.factory_to_prod = factory_to_prod
+        self.factory_cost = factory_cost
+        self.office_to_desk = office_to_desk
+        self.office_cost = office_cost
         self.no_emp_cards_in_pool = no_emp_cards_in_pool
         self.no_emp_cards_per_attr = no_emp_cards_per_attr
         self.no_bud_cards_in_pool = no_bud_cards_in_pool
@@ -330,9 +341,13 @@ class Player:
         return res
     
     def generate_game_states(self, game_settings, company, iterations = 100, debug = 0):
-        desks_per_office = game_settings.base_bud_value
+        desks_per_office = game_settings.office_to_desk
 
         ops_emp_ls = list(game_settings.operations_to_max_buildings.keys())
+        all_fin_emps = list(game_settings.finance_to_max_gross.keys())
+        all_eng_emps = list(game_settings.engineering_to_unit_cost.keys())
+        all_mkt_emps = list(game_settings.marketing_to_brand.keys())
+
         max_fin = max(list(game_settings.finance_to_max_gross.keys()))
         max_eng = max(list(game_settings.engineering_to_unit_cost.keys()))
         max_mkt = max(list(game_settings.marketing_to_brand.keys()))
@@ -341,7 +356,7 @@ class Player:
         # set up lists for each attribute
         row_keys, ops_ls, fin_ls, eng_ls, mkt_ls, off_ls, fac_ls, prc_ls, cst_ls, net_ls = [], [], [], [], [], [], [], [], [], []
         while x < iterations and y < 50000:
-
+            ops_emp, eng_emp, fin_emp, mkt_emp = 0, 0, 0, 0
             # choose random number of ops employees
             ops_emp = random.choice(ops_emp_ls)
 
@@ -356,10 +371,18 @@ class Player:
             no_fac = random.randint(0, max_buildings - no_off)
 
             # pick random remaining employees
-            max_remaining_emp = no_off * desks_per_office - ops_emp
-            eng_emp = random.randint(0, min(max_eng, max_remaining_emp))
-            fin_emp = random.randint(0, min(max_fin, max_remaining_emp - eng_emp))
-            mkt_emp = random.randint(0, min(max_mkt, max_remaining_emp - eng_emp - fin_emp))
+            max_remaining_emp = no_off * desks_per_office * game_settings.base_emp_value - ops_emp
+            if max_remaining_emp > 0:
+                allowed_eng_emps = [x for x in all_eng_emps if x <= max_remaining_emp]
+                eng_emp = random.choice(allowed_eng_emps)
+                max_remaining_emp = max_remaining_emp - eng_emp
+                if max_remaining_emp > 0:
+                    allowed_fin_emps = [x for x in all_fin_emps if x <= max_remaining_emp]
+                    fin_emp = random.choice(allowed_fin_emps)
+                    max_remaining_emp = max_remaining_emp - fin_emp
+                    if max_remaining_emp > 0:
+                        allowed_mkt_emps = [x for x in all_mkt_emps if x <= max_remaining_emp]
+                        mkt_emp = random.choice(allowed_mkt_emps)
 
             # pick random price between cost and max price
             unit_cost = game_settings.engineering_to_unit_cost[eng_emp]
@@ -423,7 +446,12 @@ class Game:
         for i in range(self.game_settings.no_bud_cards_per_attr):
             for attribute in ['production', 'storage', 'desks']:
                 att_dic = {'production':0, 'storage':0, 'desks':0}
-                att_dic[attribute] = self.game_settings.base_bud_value
-                cost = self.game_settings.base_bud_cost
+                cost = 1
+                if attribute == 'desks':
+                    att_dic['desks'] = self.game_settings.office_to_desk
+                    cost = self.game_settings.office_cost
+                elif attribute == 'production':
+                    att_dic['production'] = self.game_settings.factory_to_prod
+                    cost = self.game_settings.factory_cost
                 buds.append(BuildingCard(att_dic['production'], att_dic['storage'], att_dic['desks'], cost=cost))
         return Deck(buds)
