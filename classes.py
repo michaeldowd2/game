@@ -6,17 +6,27 @@ import matplotlib.pyplot as plt
 import numpy as np
 from os import listdir
 from os.path import  join
+
+ART_PATH = 'images/game_art'
+
 class Deck:
     def __init__(self, cards):
         self.cards = cards
 
-    def take_N(self, N):
+    def take_N(self, N, render = False):
         res = []
         for i in range(N):
             x = random.choice(self.cards)
             self.cards.remove(x)
             res.append(x)
         return res
+    
+    def render(self, cards):
+        fig, axs = plt.subplots(1, len(cards))
+        fig.set_figwidth(15)
+        
+        for i, card in enumerate(cards):
+            card.render(ax = axs[i])
 
     def remove_X(self, Card):
         self.cards.remove(Card)
@@ -33,9 +43,10 @@ class Deck:
         res = self.cards[len(self.cards)-N:]
         self.cards = self.cards[0:len(self.cards)-N]
         return res
-
+    
     def add_N_to_top(self, cards):
         self.cards = self.cards + cards       
+    
     def shuffle(self):
         random.shuffle(self.employees)
 
@@ -65,6 +76,7 @@ class BuildingCard:
 
     def __str__(self):
         return 'building, type: ' + self.type + ', cost: ' + str(self.cost) + ', production: ' + str(self.production) + ', storage: ' + str(self.storage) + ', desks: ' + str(self.desks)
+
 class EmployeeCard:
     def __init__(self, operations = 0, finance = 0, engineering = 0, marketing = 0, cost = 1, gender = 'male', image_path = ''):
         self.cost = cost
@@ -95,9 +107,11 @@ class EmployeeCard:
             return 'marketing'
         else:
             return ''
+    
     def random_traits(self):
         traits = ['Diligent', 'Hard-Worker', 'Positive', 'Creative', 'Smart', 'Thoughtful']
         return random.sample(traits, 2)
+    
     def random_name(self):
         first_names_male=('John','Andy','Joe','Tom','Michael','Tim','Bob','Frank','Sam','Jim','James','Lou','Conor','Jack','Mick','Ronald','Alphonse')
         first_names_female=('Sam','Lou','Jill','Serena','Jenny','Kate','Lily','Grace','Mary','Jane','Helen','Natalie','Nancy','Sally','Eve','Emily')
@@ -107,16 +121,26 @@ class EmployeeCard:
         else:
             return random.choice(first_names_female) + " " + random.choice(last_names)
     
-    def render(self, save = False):
-        w, h, p, r = 1024, 1365, 12, 94
+    def render(self, ax = None, save_path = ''):
+        low_res_props = {'w':256, 'h':339, 'p':4, 'r':22, 'fs1': 9, 'fs2': 10, 'fs3': 8}
+        high_res_props = {'w':1024, 'h':1365, 'p':12, 'r':94, 'fs1': 36, 'fs2': 40, 'fs3': 28}
+
+        props = low_res_props
+        if save_path != '' or ax == None: # create a full resolution axis
+            props = high_res_props
+
+        w, h, p, r = props['w'], props['h'], props['p'], props['r']
         csfont = {'fontname':'consolas'}
 
-        plt.figure(figsize=(w/100, h/100), dpi=100)
-        ax = plt.gca()
+        if ax == None:
+            plt.figure(figsize=(w/100, h/100), dpi=100)
+            ax = plt.gca()
+        
         ax.set_xlim(0, w)
         ax.get_xaxis().set_ticks([])
         ax.set_ylim(0, h)
         ax.get_yaxis().set_ticks([])
+        
         if self.image_path != '':
             img = plt.imread(self.image_path)
             imgplot = ax.imshow(img, extent=(0, w, 0, w))
@@ -133,16 +157,93 @@ class EmployeeCard:
         l4 = l4[:-2]
         
         # add to plot
-        plt.text(p, h-p, l1, fontsize=36, ha='left', va='top',**csfont)
-        plt.text(p, h-r, l2, fontsize=40, ha='left', va='top',**csfont)
-        plt.text(p, h-2*r, l3, fontsize=40, ha='left', va='top',**csfont)
-        plt.text(p, w+p, l4, fontsize=28, ha='left', va='bottom',**csfont)
+        ax.text(p, h-p, l1, fontsize=props['fs1'], ha='left', va='top',**csfont)
+        ax.text(p, h-r, l2, fontsize=props['fs2'], ha='left', va='top',**csfont)
+        ax.text(p, h-2*r, l3, fontsize=props['fs2'], ha='left', va='top',**csfont)
+        ax.text(p, w+p, l4, fontsize=props['fs3'], ha='left', va='bottom',**csfont)
         
-        if save:
-            plt.savefig('images/employee_cards/foo.png', dpi=100, bbox_inches='tight')    
+        if save_path != '':
+            plt.savefig(save_path, dpi=100, bbox_inches='tight') 
+
+        # return current figure
+        return plt 
         
     def __str__(self):
         return 'employee, name: ' + self.name + ', department: ' + self.department + ', cost: ' + str(self.cost) + ', operations: ' + str(self.operations) + ', finance: ' + str(self.finance) + ', engineering: ' + str(self.engineering) + ', marketing: ' + str(self.marketing)
+
+class MarketCard:
+    def __init__(self, value, image_path = ''):
+        self.value = value
+        self.image_path = image_path
+
+        self.name = self.get_random_event()
+        self.description =      'Upwards shift in global demand'
+        if value == 2:
+            self.description =  'Big Up move in global demand'
+        elif value == -1:
+            self.description =  'Downwards shift in global demand'
+        elif value == -2:
+            self.description =  'Big Down move in global demand'
+
+    def __str__(self):
+        return 'Market Card: ' + str(self.name) + ', value: ' + str(self.value)
+    
+    def render(self, ax = None, save_path = ''):
+        low_res_props = {'w':256, 'h':339, 'p':6, 'r':24, 'fs1': 9, 'fs2': 10, 'fs3': 8}
+        high_res_props = {'w':1024, 'h':1365, 'p':12, 'r':94, 'fs1': 36, 'fs2': 40, 'fs3': 28}
+
+        props = low_res_props
+        if save_path != '' or ax == None: # create a full resolution axis
+            props = high_res_props
+
+        w, h, p, r = props['w'], props['h'], props['p'], props['r']
+        csfont = {'fontname':'consolas'}
+
+        if ax == None:
+            plt.figure(figsize=(w/100, h/100), dpi=100)
+            ax = plt.gca()
+        
+        ax.set_xlim(0, w)
+        ax.get_xaxis().set_ticks([])
+        ax.set_ylim(0, h)
+        ax.get_yaxis().set_ticks([])
+        
+        if self.image_path != '':
+            img = plt.imread(self.image_path)
+            imgplot = ax.imshow(img, extent=(0, w, 0, w))
+        else:
+            imgplot = ax.imshow(np.zeros((w, w)), extent=(0, w, 0, w))
+
+        # set string values
+        plus = ''
+        if self.value > 0:
+            plus = '+ '
+        l1 = 'Market Move: ' + plus + str(self.value)
+        l2 = self.name
+        l3 = self.description
+        
+        # add to plot
+        ax.text(p, h - p, l1, fontsize=props['fs1'], ha='left', va='top',**csfont)
+        ax.text(p, h - p - r, l2, fontsize=props['fs2'], ha='left', va='top',**csfont)
+        ax.text(p, h - p - 2 * r, l3, fontsize=props['fs3'], ha='left', va='top',**csfont)
+        
+        if save_path != '':
+            plt.savefig(save_path, dpi=100, bbox_inches='tight') 
+
+        # return current figure
+        return plt 
+    
+    def get_random_event(self):
+        if self.value == 1:
+            return random.choice(['Economic Growth','Technological Advancements','Low Interest Rates','Quantitative Easing','Tax Cuts','Population Growth', 'Energy Price Decreases','Monetary Policy Loosening'])
+        elif self.value == -1:
+            return random.choice(['Recession','Automation and Job Losses','Energy Price Increases','Monetary Policy Tightening','Austerity Measures'])
+        elif self.value == -2:
+            return random.choice(['Financial Crisis', 'Supply Chain Disruptions', 'War Breaks Out', 'Trade Tarrifs', 'Pandemic'])
+        elif self.value == 2:
+            return random.choice(['Economic Boom', 'Stock Market Boom','New Tech Discovery','New Resources Discovered'])
+        return ''
+
 class Company:
     def __init__(self, game_settings):
         self.game_settings = game_settings
@@ -150,7 +251,7 @@ class Company:
         self.buildings = []
         self.allowed_prices = [i for i in game_settings.price_to_demand]
         self.current_price = 5
-        self.capital = game_settings.starting_capital
+        self.capital = game_settings.player_starting_cap
         self.engineering_to_unit_cost = game_settings.engineering_to_unit_cost
         self.marketing_to_brand = game_settings.marketing_to_brand
         self.finance_to_max_gross = game_settings.finance_to_max_gross
@@ -275,6 +376,7 @@ class Company:
             print('E, gross income: ' + str(potential_gross) + '/' + str(max_gross) + ', actual gross: ' + str(actual_gross) + ', total cost: ' + str(total_cost) +  ', net: ' + str(net))
             
         return True, net
+
 class GameSettings:
     def __init__(self, 
                  base_emp_value = 1,
@@ -288,28 +390,47 @@ class GameSettings:
                  finance_to_max_gross = {0:4,1:8,2:16,3:24,4:32},
                  operations_to_max_buildings = {0:2,1:3,2:4,3:5,4:6},
                  price_to_demand = {1:6,2:5,3:4,4:3,5:2},
-                 starting_capital = 10,
                  no_emp_cards_in_pool = 8,
                  no_emp_cards_per_attr = 16, 
                  no_bud_cards_in_pool = 4,
-                 no_bud_cards_per_attr = 8
+                 no_bud_cards_per_attr = 8,
+                 player_starting_cap = 10,
+                 market_values = [1,2,3,4,5,6,7,8,9,10],
+                 starting_market_value = 3,
+                 market_up_one_cards = 16,
+                 market_up_two_cards = 4,
+                 market_down_one_cards = 8,
+                 market_down_two_cards = 2
                  ):
+        
+        # card properties
         self.base_emp_value = base_emp_value
         self.base_emp_cost = base_emp_cost
         self.factory_to_prod = factory_to_prod
         self.factory_cost = factory_cost
         self.office_to_desk = office_to_desk
         self.office_cost = office_cost
-        self.no_emp_cards_in_pool = no_emp_cards_in_pool
-        self.no_emp_cards_per_attr = no_emp_cards_per_attr
-        self.no_bud_cards_in_pool = no_bud_cards_in_pool
-        self.no_bud_cards_per_attr = no_bud_cards_per_attr
-        self.starting_capital = starting_capital
+        # mappings for income function
         self.engineering_to_unit_cost = engineering_to_unit_cost
         self.marketing_to_brand = marketing_to_brand
         self.finance_to_max_gross = finance_to_max_gross
         self.operations_to_max_buildings = operations_to_max_buildings
-        self.price_to_demand = price_to_demand     
+        self.price_to_demand = price_to_demand
+        # deck properties
+        self.no_emp_cards_in_pool = no_emp_cards_in_pool
+        self.no_emp_cards_per_attr = no_emp_cards_per_attr
+        self.no_bud_cards_in_pool = no_bud_cards_in_pool
+        self.no_bud_cards_per_attr = no_bud_cards_per_attr
+        # player properties
+        self.player_starting_cap = player_starting_cap
+        # global market properties
+        self.market_values = market_values
+        self.starting_market_value = starting_market_value
+        self.market_up_one_cards = market_up_one_cards
+        self.market_up_two_cards = market_up_two_cards
+        self.market_down_one_cards = market_down_one_cards
+        self.market_down_two_cards = market_down_two_cards
+
 class Player:
     def __init__(self, game_settings):
         self.no_emp_cards_in_pool = game_settings.no_emp_cards_in_pool
@@ -466,24 +587,84 @@ class Player:
         df = pd.DataFrame({'gamestate key':row_keys, 'operations': ops_ls, 'finance': fin_ls, 'engineering': eng_ls, 'marketing': mkt_ls, 'offices': off_ls, 'factories': fac_ls, 'unit cost': cst_ls, 'price': prc_ls, 'net income': net_ls})
         
         return df
+
+class GlobalMarket:
+    def __init__(self, game_settings, no_players = 1):
+        self.game_settings = game_settings
+        self.market_demand_mappings = self.generate_market_demand_mappings() # turn -> total_demand_str -> player_demand_str -> player demand
+        self.max_demand_str_player = max(list(self.game_settings.price_to_demand.keys())) + max(list(self.game_settings.brand_to_demand.keys()))
+        self.min_demand_str_player = min(list(self.game_settings.price_to_demand.keys())) + min(list(self.game_settings.brand_to_demand.keys()))
+        self.max_demand_str_tot = self.max_demand_str_player * self.no_players
+        self.min_demand_str_tot = self.min_demand_str_player * self.no_players
+
+    def generate_market_demand_mappings(self):
+        market_value_mappings = {}
+        for market_value in self.market_values:
+            tot_demand_str = {}
+            for tot_demand_str in range(self.min_demand_str_tot, self.max_demand_str_tot + 1):
+                player_demand_str = {}
+                for player_demand_str in range(self.min_demand_str_player, self.max_demand_str_player + 1):
+                    demand = math.ceil(player_demand_str / tot_demand_str)
+                    player_demand_str[player_demand_str] = demand
+                tot_demand_str[tot_demand_str] = player_demand_str
+            market_value_mappings[market_value] = tot_demand_str   
+        return market_value_mappings
+
+    def get_market_demand(self, market_value, tot_demand_str, player_demand_str):
+        return self.market_demand_mappings[market_value][tot_demand_str][player_demand_str]
+    
+    def render(self, save_path = ''):
+        pass
+
 class Game:
     def __init__(self, game_settings, no_players, debug = 0):
         self.debug = debug
         self.no_players = no_players
         self.game_settings = game_settings
 
+        self.market_deck = self.build_market_deck()
         self.employee_deck = self.build_employee_deck()
         self.building_deck = self.build_building_deck()
         self.players = [Player(game_settings) for i in range(no_players)]
         self.companies = [Company(game_settings) for i in range(no_players)]
 
+    def build_market_deck(self):
+        markets = ['market_up','market_down','market_big_up','market_big_down']
+        art_imgs, art_idxs, art_max_idxs = {}, {}, {}
+        for market in markets:
+            art_imgs[market] = listdir(join(ART_PATH, market))
+            art_idxs[market] = 0
+            art_max_idxs[market] = len(art_imgs[market])
+        
+        cards = []
+        for market in markets:
+            no_cards = self.game_settings.market_up_one_cards
+            value = 1
+            if market == 'market_big_up':
+                no_cards = self.game_settings.market_up_two_cards
+                value = 2
+            elif market == 'market_down':
+                no_cards = self.game_settings.market_down_one_cards
+                value = -1
+            elif market == 'market_big_down':
+                no_cards = self.game_settings.market_down_two_cards
+                value = -2
+            for i in range(no_cards):
+                art_img = art_imgs[market][art_idxs[market]]
+                if art_idxs[market] < art_max_idxs[market] - 1:
+                    art_idxs[market] += 1
+                else:
+                    art_idxs[market] = 0
+                cards.append(MarketCard(value, join(ART_PATH, market, art_img)))
+        return Deck(cards)
+    
     def build_employee_deck(self):
         # employee art images
-        art_path = 'images/employee_card_art'
         genders = ['male','female']
-        art_imgs = {'male':listdir(join(art_path, 'male')), 'female':listdir(join(art_path, 'female'))}
-        art_idxs = {'male':0, 'female':0}
-        max_img_idx_male, max_img_idx_female = len(art_imgs['male']), len(art_imgs['female'])
+        art_imgs, art_idxs = {}, {}
+        for gender in genders:
+            art_imgs[gender] = listdir(join(ART_PATH, 'employees_' + gender))
+            art_idxs[gender] = 0
         
         emps = []
         for i in range(self.game_settings.no_emp_cards_per_attr):
@@ -500,7 +681,7 @@ class Game:
                 else:
                     art_idxs[gender] = 0
                 
-                emps.append(EmployeeCard(att_dic['operations'], att_dic['engineering'], att_dic['finance'], att_dic['marketing'], cost = cost, gender = gender, image_path =  join(art_path, gender, art_img)))
+                emps.append(EmployeeCard(att_dic['operations'], att_dic['engineering'], att_dic['finance'], att_dic['marketing'], cost = cost, gender = gender, image_path =  join(ART_PATH, 'employees_' + gender, art_img)))
         return Deck(emps)
 
     def build_building_deck(self):
