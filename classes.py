@@ -2,6 +2,10 @@ import random
 import copy
 import math
 import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+from os import listdir
+from os.path import  join
 class Deck:
     def __init__(self, cards):
         self.cards = cards
@@ -62,8 +66,7 @@ class BuildingCard:
     def __str__(self):
         return 'building, type: ' + self.type + ', cost: ' + str(self.cost) + ', production: ' + str(self.production) + ', storage: ' + str(self.storage) + ', desks: ' + str(self.desks)
 class EmployeeCard:
-    def __init__(self, operations = 0, finance = 0, engineering = 0, marketing = 0, cost = 1):
-        self.name = self.random_name()
+    def __init__(self, operations = 0, finance = 0, engineering = 0, marketing = 0, cost = 1, gender = 'male', image_path = ''):
         self.cost = cost
         self.operations = operations
         self.finance = finance
@@ -71,6 +74,10 @@ class EmployeeCard:
         self.marketing = marketing
         self.attributes = {'operations': operations, 'finance': finance, 'engineering': engineering, 'marketing': marketing}
         self.department = self.get_department()
+        self.gender = gender
+        self.name = self.random_name()
+        self.traits = self.random_traits()
+        self.image_path = image_path
 
     def get_department(self):
         max_val, max_attr = 0, ''
@@ -88,13 +95,52 @@ class EmployeeCard:
             return 'marketing'
         else:
             return ''
-    
+    def random_traits(self):
+        traits = ['Diligent', 'Hard-Worker', 'Positive', 'Creative', 'Smart', 'Thoughtful']
+        return random.sample(traits, 2)
     def random_name(self):
-        first_names=('John','Andy','Joe','Tom','Michael','Tim','Bob','Frank','Sam','Jim','James','Lou','Conor','Jill','Jack','Serena','Mick','Ronald','Alphonse')
+        first_names_male=('John','Andy','Joe','Tom','Michael','Tim','Bob','Frank','Sam','Jim','James','Lou','Conor','Jack','Mick','Ronald','Alphonse')
+        first_names_female=('Sam','Lou','Jill','Serena','Jenny','Kate','Lily','Grace','Mary','Jane','Helen','Natalie','Nancy','Sally','Eve','Emily')
         last_names=('Johnson','Smith','Williams','McGrath','Dowd','Sinclair','Frank','Roberts','O Shea','Wallace','Jones','Stevens','Sinclair')
-        name = random.choice(first_names) + " " + random.choice(last_names)
-        return name
+        if self.gender == 'male':
+            return random.choice(first_names_male) + " " + random.choice(last_names)
+        else:
+            return random.choice(first_names_female) + " " + random.choice(last_names)
     
+    def render(self, save = False):
+        w, h, p, r = 1024, 1365, 12, 94
+        csfont = {'fontname':'consolas'}
+
+        plt.figure(figsize=(w/100, h/100), dpi=100)
+        ax = plt.gca()
+        ax.set_xlim(0, w)
+        ax.get_xaxis().set_ticks([])
+        ax.set_ylim(0, h)
+        ax.get_yaxis().set_ticks([])
+        if self.image_path != '':
+            img = plt.imread(self.image_path)
+            imgplot = ax.imshow(img, extent=(0, w, 0, w))
+        else:
+            imgplot = ax.imshow(np.zeros((w, w)), extent=(0, w, 0, w))
+
+        # set string values
+        l1 = 'O: ' + str(self.operations) + ', F: ' + str(self.finance) + ', E: ' + str(self.engineering) + ', M: ' + str(self.marketing) + ', $' + str(self.cost)
+        l2 = 'Name: ' + self.name
+        l3 = 'Department: ' + self.department.capitalize()
+        l4 = 'Traits: '
+        for trait in self.traits:
+            l4 += trait + ', '
+        l4 = l4[:-2]
+        
+        # add to plot
+        plt.text(p, h-p, l1, fontsize=36, ha='left', va='top',**csfont)
+        plt.text(p, h-r, l2, fontsize=40, ha='left', va='top',**csfont)
+        plt.text(p, h-2*r, l3, fontsize=40, ha='left', va='top',**csfont)
+        plt.text(p, w+p, l4, fontsize=28, ha='left', va='bottom',**csfont)
+        
+        if save:
+            plt.savefig('images/employee_cards/foo.png', dpi=100, bbox_inches='tight')    
+        
     def __str__(self):
         return 'employee, name: ' + self.name + ', department: ' + self.department + ', cost: ' + str(self.cost) + ', operations: ' + str(self.operations) + ', finance: ' + str(self.finance) + ', engineering: ' + str(self.engineering) + ', marketing: ' + str(self.marketing)
 class Company:
@@ -432,13 +478,29 @@ class Game:
         self.companies = [Company(game_settings) for i in range(no_players)]
 
     def build_employee_deck(self):
+        # employee art images
+        art_path = 'images/employee_card_art'
+        genders = ['male','female']
+        art_imgs = {'male':listdir(join(art_path, 'male')), 'female':listdir(join(art_path, 'female'))}
+        art_idxs = {'male':0, 'female':0}
+        max_img_idx_male, max_img_idx_female = len(art_imgs['male']), len(art_imgs['female'])
+        
         emps = []
         for i in range(self.game_settings.no_emp_cards_per_attr):
             for attribute in ['operations', 'engineering', 'finance', 'marketing']:
                 att_dic = {'operations':0, 'engineering':0, 'finance':0, 'marketing':0}
                 att_dic[attribute] = self.game_settings.base_emp_value
                 cost = self.game_settings.base_emp_cost
-                emps.append(EmployeeCard(att_dic['operations'], att_dic['engineering'], att_dic['finance'], att_dic['marketing'], cost = cost))
+
+                # get next art image
+                gender = random.choice(genders)
+                art_img = art_imgs[gender][art_idxs[gender]]
+                if art_idxs[gender] < len(art_imgs[gender]) - 1:
+                    art_idxs[gender] += 1
+                else:
+                    art_idxs[gender] = 0
+                
+                emps.append(EmployeeCard(att_dic['operations'], att_dic['engineering'], att_dic['finance'], att_dic['marketing'], cost = cost, gender = gender, image_path =  join(art_path, gender, art_img)))
         return Deck(emps)
 
     def build_building_deck(self):
