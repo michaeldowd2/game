@@ -7,6 +7,7 @@ import numpy as np
 from os import listdir
 from os.path import join
 from matplotlib import patches
+from pyfonts import load_font
 
 class Deck:
     def __init__(self, cards):
@@ -25,7 +26,8 @@ class Deck:
         fig.set_figwidth(15)
         
         for i, card in enumerate(cards):
-            card.render(ax = axs[i])
+            if card is not None:
+                card.render(ax = axs[i])
 
     def remove_X(self, Card):
         self.cards.remove(Card)
@@ -47,16 +49,20 @@ class Deck:
         self.cards = self.cards + cards       
     
     def shuffle(self):
-        random.shuffle(self.employees)
+        random.shuffle(self.cards)
 
 class BuildingCard:       
-    def __init__(self, production = 0, storage = 0, desks = 0, cost = 2):
+    def __init__(self, production = 0, storage = 0, desks = 0, cost = 2, building_type = '', image_path = ''):
         self.cost = cost
         self.production = production
         self.storage = storage
         self.desks = desks
         self.attributes = {'production': production, 'storage': storage, 'desks': desks}
-        self.type = self.get_type()
+
+        self.type = building_type
+        if building_type == '':
+            self.type = self.get_type()
+        self.image_path = image_path
     
     def get_type(self):
         max_val, max_attr = 0, ''
@@ -76,8 +82,44 @@ class BuildingCard:
     def __str__(self):
         return 'building, type: ' + self.type + ', cost: ' + str(self.cost) + ', production: ' + str(self.production) + ', storage: ' + str(self.storage) + ', desks: ' + str(self.desks)
 
-    def render(self):
-        pass
+    def render(self, ax = None, save_path = ''):
+        low_res_props = {'w':256, 'h':339, 'p':4, 'r':22, 'fs1': 8, 'fs2': 10, 'fs3': 8}
+        high_res_props = {'w':1024, 'h':1365, 'p':12, 'r':94, 'fs1': 34, 'fs2': 40, 'fs3': 28}
+
+        props = low_res_props
+        if save_path != '' or ax == None: # create a full resolution axis
+            props = high_res_props
+
+        w, h, p, r = props['w'], props['h'], props['p'], props['r']
+        csfont = {'fontname':'consolas'}
+
+        if ax == None:
+            plt.figure(figsize=(w/100, h/100), dpi=100)
+            ax = plt.gca()
+        
+        ax.set_xlim(0, w)
+        ax.get_xaxis().set_ticks([])
+        ax.set_ylim(0, h)
+        ax.get_yaxis().set_ticks([])
+        
+        if self.image_path != '':
+            img = plt.imread(self.image_path)
+            imgplot = ax.imshow(img, extent=(0, w, 0, w))
+        else:
+            imgplot = ax.imshow(np.zeros((w, w)), extent=(0, w, 0, w))
+
+        # set string values
+        l1 = 'Production: ' + str(self.production) + ', Desks: ' + str(self.desks) + ', $' + str(self.cost)
+        l2 = 'Type: ' + self.type.capitalize()
+        # add to plot
+        ax.text(p, h-p, l1, fontsize=props['fs1'], ha='left', va='top',**csfont)
+        ax.text(p, h-r, l2, fontsize=props['fs2'], ha='left', va='top',**csfont)
+        
+        if save_path != '':
+            plt.savefig(save_path, dpi=100, bbox_inches='tight') 
+
+        # return current figure
+        return plt 
 
 class EmployeeCard:
     def __init__(self, operations = 0, finance = 0, engineering = 0, marketing = 0, cost = 1, gender = 'male', image_path = ''):
@@ -211,7 +253,6 @@ class MarketCard:
         ax.get_yaxis().set_ticks([])
         
         if self.image_path != '':
-            print('img path: ' + self.image_path)
             img = plt.imread(self.image_path)
             imgplot = ax.imshow(img, extent=(0, w, 0, w))
         else:
@@ -423,8 +464,8 @@ class GameSettings:
                  no_emp_cards_per_attr = 16, 
                  no_bud_cards_in_pool = 4,
                  no_bud_cards_per_attr = 8,
-                 market_strength_to_demand = {1:4,2:8,3:12,4:16,5:20,6:24},
-                 starting_market_strength = 3,
+                 market_strength_to_demand = {1:5,2:6,3:9,4:12,5:15,6:18,7:21,8:24},
+                 player_no_to_market_strength_range = {2:(1,2,4), 3:(2,3,6), 4:(3,4,8)},
                  market_up_one_cards = 16,
                  market_up_two_cards = 4,
                  market_down_one_cards = 8,
@@ -457,9 +498,9 @@ class GameSettings:
 
         # global market properties
         self.allowed_market_strength_values = [i for i in market_strength_to_demand] # set allowed prices from the mapping dict
+        self.player_no_to_market_strength_range = player_no_to_market_strength_range
         self.allowed_desirability_values = list(set([price_des_plus_brand_to_desirability[i] for i in price_des_plus_brand_to_desirability])) # list of product desirability values
         self.market_strength_to_demand = market_strength_to_demand
-        self.starting_market_strength = starting_market_strength
         self.market_up_one_cards = market_up_one_cards
         self.market_up_two_cards = market_up_two_cards
         self.market_down_one_cards = market_down_one_cards
@@ -635,9 +676,15 @@ class Market:
     def __init__(self, game_settings, no_players = 1, image_path = ''):
         self.game_settings = game_settings
         self.no_players = no_players
-        self.current_strength = game_settings.starting_market_strength
         self.market_strength_mappings = self.generate_market_strength_mappings() # turn -> total_demand_str -> player_demand_str -> player demand
         self.image_path = image_path
+
+        self.min_market_strength = game_settings.player_no_to_market_strength_range[no_players][0]
+        self.current_strength = game_settings.player_no_to_market_strength_range[no_players][1]
+        self.max_market_strength = game_settings.player_no_to_market_strength_range[no_players][2]
+
+    def apply_market_move(self, market_move):
+        self.current_strength = max([self.min_market_strength, min([self.max_market_strength, self.current_strength + market_move])])
 
     def generate_market_strength_mappings(self):
         min_player_product_desirability = min(self.game_settings.allowed_desirability_values)
@@ -647,12 +694,17 @@ class Market:
 
         market_strength_mappings = {}
         for market_strength in self.game_settings.market_strength_to_demand:
-            market_demand = self.game_settings.market_strength_to_demand[market_strength] # total market demand at this level
+            
             total_desirability_to_demand = {}
             for total_desirability in range(min_total_product_desirability, max_total_product_desirability + 1):
                 player_desirability_to_demand = {}
                 for player_desirability in range(min_player_product_desirability, max_Player_product_desirability + 1):
-                    player_desirability_to_demand[player_desirability] = math.ceil(market_demand * player_desirability / total_desirability)
+                    if player_desirability <= total_desirability and player_desirability + max_Player_product_desirability * (self.no_players - 1) >= total_desirability:
+                        market_demand = self.game_settings.market_strength_to_demand[market_strength] # total market demand at this level
+                        demand = int(market_demand * player_desirability / total_desirability)
+                        #demand = max([1, demand])
+                        #demand = min([demand, player_desirability])
+                        player_desirability_to_demand[player_desirability] = demand
                 total_desirability_to_demand[total_desirability] = player_desirability_to_demand
             market_strength_mappings[market_strength] = total_desirability_to_demand   
         return market_strength_mappings
@@ -662,80 +714,109 @@ class Market:
             print('market stength: ' + str(market_strength) + ', total desirability: ' + str(total_desirability) + ', player desirability: ' + str(player_desirability))
         return self.market_strength_mappings[market_strength][total_desirability][player_desirability]
     
-    def render(self, ax = None, save_path = ''):
+    def render(self, ax = None, save_path = '', player_desirabilities = []):
+        tot_player_desirability = sum(player_desirabilities)
+        render_players = len(player_desirabilities) > 0
+        player_cols = {0:'purple',1:'green',2:'blue',3:'red',4:'yellow',5:'orange'}
+
         if self.image_path != '':
-            print('here')
             imgs = listdir(join(self.image_path, 'board'))
             no_imgs = len(imgs)
-            if no_imgs > 0:
-                f1s = 20
-                f2s = 32
-                p = 128
-                no_market_strengths = 4 # len(self.game_settings.market_strength_to_demand)
-                max_players =  4
-                w, h = 760 * no_market_strengths + 2 * p, 760 * max_players + 2 * p
+            fontsize1, fontsize2, padding, fontsize3 = 20, 28, 128, 24
+            no_market_strengths = len(self.game_settings.market_strength_to_demand)
+            max_players =  self.no_players
+            max_player_des = max(self.game_settings.allowed_desirability_values)
+            max_total_des = max_players * max(self.game_settings.allowed_desirability_values)
+            w, h = 760 * no_market_strengths + 2 * padding, 760 * max_players + 2 * padding
 
-                csfont = {'fontname':'consolas'}
+            font = load_font(
+                font_url="https://github.com/google/fonts/blob/main/apache/specialelite/SpecialElite-Regular.ttf?raw=true"
+            )
+            csfont = {'fontname':'consolas'}
 
-                if ax == None:
-                    plt.figure(figsize=(w/100, h/100), dpi=100)
-                    ax = plt.gca()
-            
-                ax.set_xlim(0, w)
-                ax.get_xaxis().set_ticks([])
-                ax.set_ylim(0, h)
-                ax.get_yaxis().set_ticks([])
-            
-                count = 0
+            if ax == None:
+                plt.figure(figsize=(w/100, h/100), dpi=100)
+                ax = plt.gca()
+        
+            ax.set_xlim(0, w)
+            ax.get_xaxis().set_ticks([])
+            ax.set_ylim(0, h)
+            ax.get_yaxis().set_ticks([])
+        
+            count = 0
+            for i in range(no_market_strengths):
+                #market strength ruler
+                rect = patches.Rectangle((padding + i * 760, h - padding), 760, padding, linewidth = 1, edgecolor = 'black', facecolor = 'none')
+                ax.add_patch(rect)
+                ax.text(padding + i * 760 + 380, h - 12, 'Market Strength: ' + str(i+1), fontsize = fontsize1, ha = 'center', va = 'top', font = font) #**csfont)
 
-                for i in range(no_market_strengths):
-                    #market strength ruler
-                    rect = patches.Rectangle((p+i*760, h - p), 760, p, linewidth=1, edgecolor='black', facecolor='none')
-                    ax.add_patch(rect)
-                    ax.text(p+i*760+380, h-12, 'Market Strength: ' + str(i+1), fontsize=f1s, ha='center', va='top',**csfont)
-
-
+                # draw images
+                if no_imgs > 0:
                     for j in range(max_players):
-                        x0, y0, x1, y1 = p+i*760, p+j*760, p+i*760 + 760, p+j*760+760
+                        x0, y0, x1, y1 = padding + i * 760, padding + j * 760, padding + i * 760 + 760, padding + j * 760 + 760
                         img_idx = count % no_imgs
                         img = plt.imread(join(self.image_path, 'board', imgs[img_idx]))
-                        imgplot = ax.imshow(img, extent=(x0,x1,y0,y1))
+                        imgplot = ax.imshow(img, extent=(x0, x1, y0, y1))
                         count += 1
-                max_desirability = max(self.game_settings.allowed_desirability_values)
-                #draw rectangle
-                for i in range(no_market_strengths):
-                    for j in range(max_players):
-                        w, h = 113, 113        
-                        x0, y0 = p + i * 760, p + j * 760 + 195
-                        
-                        for x in range(len(self.game_settings.allowed_desirability_values)):
-                            x_mods = {0:0,1:0,2:-6,3:-10,4:0} # modify start points of rectangles
-                            w_mods = {0:0,1:-6,2:-4,3:10,4:0} # modify widths of rectangles
-                            x_mod, w_mod = 0, 0
-                            if x in x_mods:
-                                x_mod = x_mods[x]
-                            if x in w_mods:
-                                w_mod = w_mods[x]
-                            start_x = x0 + 113 * x + x_mod
-                            width = 113 + w_mod
-                            for y in range(len(self.game_settings.allowed_desirability_values)):
-                                y_mods = {0:0,1:2,2:8,3:4,4:2} # modify start points of rectangles
-                                h_mods = {0:2,1:6,2:-4,3:-2,4:-2} # modify heights of rectangles
-                                y_mod, h_mod = 0, 0
-                                if y in y_mods:
-                                    y_mod = y_mods[y]
-                                if y in h_mods:
-                                    h_mod = h_mods[y]
-                                start_y = y0 + 113 * y + y_mod
-                                height = 113 + h_mod
+                
+            for i in range(no_market_strengths):
+                for j in range(max_players):
+                    w, h = 113, 113        
+                    x0, y0 = padding + i * 760, padding + j * 760 + 195
+                    
+                    for x in range(len(self.game_settings.allowed_desirability_values)):
+                        desirability = x + 1
 
-                                rect = patches.Rectangle((start_x, start_y), width, height, linewidth=1, edgecolor='black', facecolor='white', alpha = 0.2)
+                        x_mod, w_mod, x_mods, w_mods = 0, 0, {0:0,1:0,2:-6,3:-10,4:0}, {0:0,1:-6,2:-4,3:10,4:0} # modify start points and widthsof rectangles
+                        if x in x_mods:
+                            x_mod = x_mods[x]
+                        if x in w_mods:
+                            w_mod = w_mods[x]
+                        start_x = x0 + 113 * x + x_mod
+                        width = 113 + w_mod
+
+                        for y in range(len(self.game_settings.allowed_desirability_values)):
+                            tot_desirability = j * max_player_des + y + 1
+
+                            y_mod, h_mod, y_mods, h_mods = 0, 0, {0:0,1:2,2:8,3:4,4:2}, {0:2,1:6,2:-4,3:-2,4:-2} # modify start points and heights of rectangles
+                            if y in y_mods:
+                                y_mod = y_mods[y]
+                            if y in h_mods:
+                                h_mod = h_mods[y]
+                            start_y = y0 + 113 * y + y_mod
+                            height = 113 + h_mod
+
+                            # y axis labels
+                            if i == 0 and x == 0:
+                                ax.text(start_x - 16, start_y + height / 2, str(tot_desirability), fontsize = fontsize3, ha = 'right', va = 'center', font = font)
+
+                            # x axis labels
+                            if tot_desirability == max_total_des:
+                                ax.text(start_x + width / 2, start_y + height + 6, str(desirability), fontsize = fontsize3, ha = 'center', va = 'bottom', font = font)
+
+                            # values
+                            if desirability in self.market_strength_mappings[i + 1][tot_desirability] and self.market_strength_mappings[i + 1][tot_desirability][desirability] > 0:
+                                rect = patches.Rectangle((start_x, start_y), width, height, linewidth=1, edgecolor='black', facecolor='white', alpha = 0.3)
                                 ax.add_patch(rect)
-                                text = str(self.market_strength_mappings[i+1][j*max_desirability+y+1][x+1]) # str(i+1) + ', ' + str(j*max_desirability+y+1) + ', ' + str(x+1) + ', ' + str(self.market_strength_mappings[i+1][j*max_desirability+y+1][x+1])
-                                ax.text(start_x + width/2, start_y+height/2, text, fontsize=f2s, ha='center', va='center',**csfont, color = 'black')
-                if save_path != '':
-                    plt.savefig(save_path, dpi=100, bbox_inches='tight') 
-
+                                text = str(self.market_strength_mappings[i + 1][tot_desirability][desirability])
+                                ax.text(start_x + width / 2, start_y + height / 2, text, fontsize = fontsize2, ha = 'center', va = 'center', color = 'black', font = font)
+                            
+                            # draw player demands
+                            offsets = [(-16, -16), (16, 16), (16, -16), (-16, 16), (-6,-6), (6,6)]
+                            if render_players and self.current_strength == i+1 and tot_player_desirability == tot_desirability:
+                                for p_ind in range(len(player_desirabilities)):
+                                    player_desirability = player_desirabilities[p_ind]
+                                    if player_desirability == desirability:
+                                        off = offsets[p_ind]
+                                        count = len([x for x in player_desirabilities if x == player_desirability])
+                                        if count == 1:
+                                            off = (0,0)
+                                        col = player_cols[p_ind]
+                                        circle = patches.Circle((start_x + off[0] + width / 2, start_y + off[1] + height / 2), radius = 36, linewidth = 2, edgecolor = 'black', facecolor = col, alpha=0.4)
+                                        ax.add_patch(circle)
+            
+            if save_path != '':
+                plt.savefig(save_path, dpi=100, bbox_inches='tight') 
 
 class Game:
     def __init__(self, game_settings, no_players, theme = 'theme_0', debug = 0):
@@ -743,21 +824,56 @@ class Game:
         self.debug = debug
         self.no_players = no_players
         self.game_settings = game_settings
+        self.turn_number = 0
 
+        # build decks
         self.market_deck = self.build_market_deck()
-        self.employee_deck = self.build_employee_deck()
         self.building_deck = self.build_building_deck()
+        self.employee_deck = self.build_employee_deck()
 
-        self.market = Market(game_settings, image_path = self.asset_path)
+        # shuffle decks
+        self.market_deck.shuffle()
+        self.market_deck.shuffle()
+        self.market_deck.shuffle()
+
+        # set up game entities
+        self.market = Market(game_settings, no_players = no_players, image_path = self.asset_path)
         self.companies = [Company(game_settings, self.market) for i in range(no_players)]
         self.players = [Player(game_settings, self.companies[i]) for i in range(no_players)]
 
-    def start(self):
-        for turn in range(len(self.game_settings.no_of_turns_in_game)):
-            self.run_turn()
+    def run_turn(self, render = False, debug = 0):
+        if debug:
+            print('--- running turn ' + str(self.turn_number) + ', starting market strength: ' + str(self.market.current_strength) + ', market deck size: ' + str(len(self.market_deck.cards)) + ', building deck size: ' + str(len(self.building_deck.cards)) + ', employee deck size: ' + str(len(self.employee_deck.cards)) + ' ---')
+            
+        # Draw cards for turn
+        market_card = self.market_deck.take_N_from_top(1)[0]
+        building_pool = self.building_deck.take_N_from_top(3)
+        employee_pool = self.employee_deck.take_N_from_top(5)
 
-    def run_turn(self):
-        pass
+        if render:
+            self.render_current_turn_cards(market_card, building_pool, employee_pool)
+
+        # apply market move card
+        self.market.apply_market_move(market_card.value)
+
+        player_desirabilities = []
+        for p in range(self.no_players):
+            p_des = random.choice([1,2,3,4,5]) # replace with some
+            player_desirabilities.append(p_des)
+
+        if render:
+            self.market.render(player_desirabilities = player_desirabilities)
+        
+        # Add cards back into decks
+        self.market_deck.add_N_to_bottom([market_card])
+        self.building_deck.add_N_to_bottom(building_pool)
+        self.employee_deck.add_N_to_bottom(employee_pool)
+
+        if debug:
+            print('--- finished turn ' + str(self.turn_number) + ', ending market strength: ' + str(self.market.current_strength) + ', market deck size: ' + str(len(self.market_deck.cards)) + ', building deck size: ' + str(len(self.building_deck.cards)) + ', employee deck size: ' + str(len(self.employee_deck.cards)) + ' ---')
+
+        self.turn_number += 1
+        
 
     def build_market_deck(self):
         markets = ['market_up','market_down','market_big_up','market_big_down']
@@ -815,16 +931,60 @@ class Game:
         return Deck(emps)
 
     def build_building_deck(self):
-        buds = []
+        buds, art_imgs, art_idxs  = [], {}, {}
+        for bud_type in ['factory', 'office']:
+            art_imgs[bud_type] = listdir(join(self.asset_path, 'buildings_' + bud_type))
+            art_idxs[bud_type] = 0
+
         for i in range(self.game_settings.no_bud_cards_per_attr):
-            for attribute in ['production', 'storage', 'desks']:
-                att_dic = {'production':0, 'storage':0, 'desks':0}
-                cost = 1
-                if attribute == 'desks':
+            for bud_type in ['factory', 'office']:
+                att_dic, cost, art_img = {'production':0, 'storage':0, 'desks':0}, 1, ''
+                if len(art_imgs[bud_type])>0:
+                    idx = art_idxs[bud_type] % len(art_imgs[bud_type])
+                    art_img = join(self.asset_path, 'buildings_' + bud_type, art_imgs[bud_type][idx]) 
+                    art_idxs[bud_type] += 1
+
+                if bud_type == 'office':
                     att_dic['desks'] = self.game_settings.office_to_desk
                     cost = self.game_settings.office_cost
-                elif attribute == 'production':
+                elif bud_type == 'factory':
                     att_dic['production'] = self.game_settings.factory_to_prod
                     cost = self.game_settings.factory_cost
-                buds.append(BuildingCard(att_dic['production'], att_dic['storage'], att_dic['desks'], cost=cost))
+                buds.append(BuildingCard(att_dic['production'], att_dic['storage'], att_dic['desks'], cost=cost, building_type = bud_type, image_path = art_img))
         return Deck(buds)
+
+    def render_current_turn_cards(self, market_card, bud_cards, emp_cards):
+        self.render_row_of_cards(['Market Card', 'Building Card Pool'],[market_card, None] + bud_cards)
+        self.render_row_of_cards(['Employee Card Pool'], emp_cards)
+
+    def render_row_of_cards(self, titles, cards):
+        fig, axs = plt.subplots(1, len(cards))
+        fig.set_figwidth(15)
+        for i, card in enumerate(cards):
+            if len(titles) > 0 and i == 0:
+                axs[i].set_title(titles[0], loc='left')
+            if len(titles) > 1 and i == len(cards) - 1:
+                axs[i].set_title(titles[1], loc='right')
+            if card is None:
+                self.render_none(axs[i])
+            else:
+                
+                card.render(ax = axs[i])
+    
+    def render_none(self, ax = None):
+        props = {'w':256, 'h':339, 'p':6, 'r':24, 'fs1': 9, 'fs2': 10, 'fs3': 8}
+        w, h, p, r = props['w'], props['h'], props['p'], props['r']
+        
+        if ax == None:
+            plt.figure(figsize=(w/100, h/100), dpi=100)
+            ax = plt.gca()
+        
+        ax.set_xlim(0, w)
+        ax.set_ylim(0, h)
+        # disable axis outlines and ticks
+        ax.get_xaxis().set_ticks([])
+        ax.get_yaxis().set_ticks([])
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+        ax.spines['left'].set_visible(False)
