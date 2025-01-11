@@ -80,7 +80,7 @@ class BuildingCard:
             return ''
 
     def __str__(self):
-        return 'building, type: ' + self.type + ', cost: ' + str(self.cost) + ', production: ' + str(self.production) + ', storage: ' + str(self.storage) + ', desks: ' + str(self.desks)
+        return 'p' + str(self.production) + ' d' + str(self.desks) + ' $' + str(self.cost)
 
     def render(self, ax = None, save_path = ''):
         low_res_props = {'w':256, 'h':339, 'p':4, 'r':22, 'fs1': 8, 'fs2': 10, 'fs3': 8}
@@ -213,7 +213,7 @@ class EmployeeCard:
         return plt 
         
     def __str__(self):
-        return 'employee, name: ' + self.name + ', department: ' + self.department + ', cost: ' + str(self.cost) + ', operations: ' + str(self.operations) + ', finance: ' + str(self.finance) + ', engineering: ' + str(self.engineering) + ', marketing: ' + str(self.marketing)
+        return 'o' + str(self.operations) + ' f' + str(self.finance) + ' e' + str(self.engineering) + ' m' + str(self.marketing) + ' $' + str(self.cost)
 
 class MarketCard:
     def __init__(self, value, image_path = ''):
@@ -230,7 +230,7 @@ class MarketCard:
             self.description =  'Big Down move in global demand'
 
     def __str__(self):
-        return 'Market Card: ' + str(self.name) + ', value: ' + str(self.value)
+        return 'M: value: ' + str(self.value)
     
     def render(self, ax = None, save_path = ''):
         low_res_props = {'w':256, 'h':339, 'p':6, 'r':24, 'fs1': 9, 'fs2': 10, 'fs3': 8}
@@ -305,8 +305,19 @@ class Company:
         self.capital -= deposit
         self.buildings.append(building)
 
-    def analyse_game_state(self, game_state, market_strength, total_desirability = -1, debug = 0):
-        ops_emp, fin_emp, eng_emp, mkt_emp, no_off, no_fac, sel_prc = game_state
+    def get_hand_dic(self, employee_cards = None, building_cards = None, price = None):
+        emps = employee_cards if employee_cards != None else self.employees
+        buds = building_cards if building_cards != None else self.buildings
+        sel_prc = price if price != None else self.current_price
+
+        operations, engineering, finance, marketing, employee_cost = self.get_employee_attributes(emps)
+        production, storage, desks, building_cost = self.get_building_attributes(buds)
+        no_fac = int(production / self.game_settings.factory_to_prod)
+        no_off = int(desks / self.game_settings.office_to_desk)
+        return {'ops':operations, 'fin':finance, 'eng':engineering, 'mkt':marketing, 'dsk':desks, 'prd':production, 'prc':sel_prc}
+    
+    def analyse_game_state(self, hand_key, market_strength, total_desirability = -1, debug = 0):
+        ops_emp, fin_emp, eng_emp, mkt_emp, no_off, no_fac, sel_prc = hand_key
         base_emp_val = self.game_settings.base_emp_value
         ops_emp = int(ops_emp / base_emp_val)
         fin_emp = int(fin_emp / base_emp_val)
@@ -360,18 +371,19 @@ class Company:
             brand = self.game_settings.marketing_to_brand[marketing]
         else:
             brand = max(self.game_settings.marketing_to_brand.values())
-        
         if price in self.game_settings.price_to_price_des:
             price_desirability = self.game_settings.price_to_price_des[price]
         else:
-            print('invalid company: price is not allowed')
+            if debug:
+                print('invalid company: price is not allowed')
             return False, 0
 
         price_des_plus_brand = brand + price_desirability
         if price_des_plus_brand in self.game_settings.price_des_plus_brand_to_desirability:
             desirability = self.game_settings.price_des_plus_brand_to_desirability[price_des_plus_brand]
         else:
-            print('invalid company: price desirabilty or brand is invalid')
+            if debug:
+                print('invalid company: price desirabilty or brand is invalid')
             return False, 0
         
         return True, desirability
@@ -405,67 +417,70 @@ class Company:
         
         # check these are valid combinations
         if len(buildings) > max_buildings:
-            print('invalid company: too many buildings: ' + str(len(buildings)) + ', max buildings: ' + str(max_buildings))
+            if debug:
+                print('invalid company: too many buildings: ' + str(len(buildings)) + ', max buildings: ' + str(max_buildings))
             return False, 0
         
         if price in self.game_settings.price_to_price_des:
             price_desirability = self.game_settings.price_to_price_des[price]
         else:
-            print('invalid company: price is not allowed')
+            if debug:
+                print('invalid company: price is not allowed')
             return False, 0
         
         if len(employees) > desks:
-            print('invalid company: too many employees: ' + str(len(employees)) + ', desks: ' + str(desks))
+            if debug:
+                print('invalid company: too many employees: ' + str(len(employees)) + ', desks: ' + str(desks))
             return False, 0
         
         # product desirability (brand + price desirability -> desirability)
-        price_des_plus_brand = brand + price_desirability # 2,3,4,5,6,7,8,9,10
+        price_des_plus_brand = price_desirability + brand  # 2,3,4,5,6,7,8,9,10
         if price_des_plus_brand in self.game_settings.price_des_plus_brand_to_desirability:
             desirability = self.game_settings.price_des_plus_brand_to_desirability[price_des_plus_brand]
         else:
-            print('invalid company: price desirabilty or brand is invalid')
+            if debug:
+                print('invalid company: price desirabilty or brand is invalid')
             return False, 0
         
         # calculate demand (desirability -> demand)
         if total_desirability == -1:
             total_desirability = desirability # this is the test case or a single player game
         
-        demand = self.market.get_player_demand(market_strength, total_desirability, desirability)
+        demand = self.market.get_player_demand(market_strength, total_desirability, desirability, False)
         units_sold = min([production, demand])
         unit_profit = price - unit_cost
         potential_gross = units_sold * unit_profit
         actual_gross = min([potential_gross, max_gross])
         net = actual_gross - total_cost
         if debug:
-            print('A. employees: ' + str(len(employees)) + '/' + str(desks) + ', operations: ' + str(operations) + ', engineering: ' + str(engineering) + ', finance: ' + str(finance) + ', marketing: ' + str(marketing))
-            print('B. buildings: ' + str(len(buildings)) + '/' + str(max_buildings) + ', production: ' + str(production) + ', desks: ' + str(desks))
-            print('C. (price desirability: ' + str(price) + ' + brand desirability: ' + str(brand) + ') -> desirability: ' + str(desirability))
-            print('D. market strength: ' + str(market_strength) + ' -> total desirability: ' + str(total_desirability) + ' -> desirability: ' + str(desirability) + ' -> demand: ' + str(demand) + '/' + str(production))
-            print('E. (price: ' + str(price) + ' - unit cost: ' + str(unit_cost) + ') = unit profit: ' + str(unit_profit) + ' x units sold: ' + str(units_sold) + ' = potential gross: ' + str(potential_gross) + '/' + str(max_gross))
-            print('F. (actual gross: ' + str(actual_gross) + ' - total cost: ' + str(total_cost) +  ') = net income: ' + str(net))
+            print(' ---- A. max buildings: ' + str(max_buildings) + ', max employees: ' + str(desks) + ', max gross: ' + str(max_gross))
+            print(' ---- B. (price desirability: ' + str(price_desirability) + ' + brand desirability: ' + str(brand) + ') -> desirability: ' + str(desirability))
+            print(' ---- C. market strength: ' + str(market_strength) + ' -> total desirability: ' + str(total_desirability) + ' -> desirability: ' + str(desirability) + ' -> player demand: ' + str(demand) + '/' + str(production))
+            print(' ---- D. (price: ' + str(price) + ' - unit cost: ' + str(unit_cost) + ') = unit profit: ' + str(unit_profit) + ' x units sold: ' + str(units_sold) + ' = potential gross: ' + str(potential_gross) + '/' + str(max_gross))
+            print(' ---- E. (actual gross: ' + str(actual_gross) + ' - total cost: ' + str(total_cost) +  ') = net income: ' + str(net))
             
-        return True, net
+        return True, int(net)
 
 class GameSettings:
     def __init__(self, 
                  base_emp_value = 1,
-                 base_emp_cost = 0.5,
-                 factory_to_prod = 4,
-                 factory_cost = 1,
+                 base_emp_cost = 1,
+                 factory_to_prod = 3,
+                 factory_cost = 2,
                  office_to_desk = 4,
                  office_cost = 1,
                  engineering_to_unit_cost = {0:5,1:4,2:3,3:2,4:1},
-                 marketing_to_brand = {0:2,1:3,2:4,3:5,4:6},
-                 finance_to_max_gross = {0:4,1:8,2:16,3:24,4:32},
-                 operations_to_max_buildings = {0:2,1:3,2:4,3:5,4:6},
-                 price_to_price_des =  {1:8,2:7,3:6,4:5,5:4},
+                 marketing_to_brand = {0:1,1:2,2:3,3:4,4:5},
+                 finance_to_max_gross = {0:4,1:12,2:24,3:36,4:48},
+                 operations_to_max_buildings = {0:2,1:4,2:6,3:7,4:8},
+                 price_to_price_des =  {1:5,2:4,3:3,4:2,5:1},
                  price_des_plus_brand_to_desirability = {2:1,3:1,4:2,5:2,6:3,7:3,8:4,9:4,10:5},
                  no_emp_cards_in_pool = 8,
                  no_emp_cards_per_attr = 16, 
                  no_bud_cards_in_pool = 4,
                  no_bud_cards_per_attr = 8,
                  market_strength_to_demand = {1:5,2:6,3:9,4:12,5:15,6:18,7:21,8:24},
-                 player_no_to_market_strength_range = {2:(1,2,4), 3:(2,3,6), 4:(3,4,8)},
+                 player_no_to_market_strength_range = {1:(1,2,3), 2:(1,2,4), 3:(2,3,6), 4:(3,4,8)},
                  market_up_one_cards = 16,
                  market_up_two_cards = 4,
                  market_down_one_cards = 8,
@@ -551,12 +566,12 @@ class Player:
                 break
         return likely_pool, likelihood
 
-    def find_move(self, company, available_employees, available_buildings, market_strength, total_desirability = -1, debug = 0):
-        test_emp_idx_combos = self.generate_doubles(len(available_employees)) # hire up to two employees per turn
+    def find_move(self, company, available_employees, available_buildings, market_strength, other_players_des = -1, debug = 0):
+        test_emp_idx_combos = self.generate_move_combinations(len(available_employees)) # hire up to two employees per turn
         test_bud_idxs = range(len(available_buildings)) # pick up to one building per turn
         test_prices = list(self.game_settings.price_to_price_des.keys())
         
-        best_net, best_emp_combo, best_bud_idx, best_price = -10000, [], 5
+        best_net, best_emp_combo, best_bud_idx, best_price = -10000, [], -1, 5
         for test_emp_idx_combo in test_emp_idx_combos:
             test_emps = copy.deepcopy(company.employees)
             for test_emp_idx in test_emp_idx_combo:
@@ -567,16 +582,20 @@ class Player:
                 test_buds.append(available_buildings[bud_idx])
             
                 for test_price in test_prices:
-                    test_net = company.calculate_net(test_emps, test_buds, test_price, market_strength, total_desirability, False)
-                    if debug > 1:
-                        print('Testing price: ' + str(test_price) + ', test emp idxs + ' + str(test_emp_idx_combo) + ', test bud idx: ' + str(bud_idx) + ', net: ' + str(test_net))
-                    if test_net > best_net:
-                        best_net = test_net
-                        best_emp_combo = test_emp_idx_combo
-                        best_bud_idx = bud_idx
-                        best_price = test_price
-                        if debug > 1:
-                            print('new best set, best possible net: ' + str(best_net) + ', best emp combo: ' + str(best_emp_combo) + ', best bud idx: ' + str(best_bud_idx) + ', best price: ' + str(best_price))
+                    valid, test_des = company.calculate_desirability(test_emps, test_price, debug)
+                    if valid:
+                        total_des = test_des + other_players_des
+                        valid, test_net = company.calculate_net(test_emps, test_buds, test_price, market_strength, total_des, debug)
+                        if valid:
+                            if debug > 1:
+                                print('Testing price: ' + str(test_price) + ', test emp idxs + ' + str(test_emp_idx_combo) + ', test bud idx: ' + str(bud_idx) + ', net: ' + str(test_net))
+                            if test_net > best_net:
+                                best_net = test_net
+                                best_emp_combo = test_emp_idx_combo
+                                best_bud_idx = bud_idx
+                                best_price = test_price
+                                if debug > 1:
+                                    print('new best set, best possible net: ' + str(best_net) + ', best emp combo: ' + str(best_emp_combo) + ', best bud idx: ' + str(best_bud_idx) + ', best price: ' + str(best_price))
         if debug:
             print('new best set, best possible net: ' + str(best_net) + ', best emp combo: ' + str(best_emp_combo) + ', best bud idx: ' + str(best_bud_idx) + ', best price: ' + str(best_price))
         return best_emp_combo, best_bud_idx, best_price, best_net
@@ -819,7 +838,7 @@ class Market:
                 plt.savefig(save_path, dpi=100, bbox_inches='tight') 
 
 class Game:
-    def __init__(self, game_settings, no_players, theme = 'theme_0', debug = 0):
+    def __init__(self, game_settings, no_players, shuffle = True, theme = 'theme_0', debug = 0):
         self.asset_path = join('assets', theme)
         self.debug = debug
         self.no_players = no_players
@@ -832,34 +851,106 @@ class Game:
         self.employee_deck = self.build_employee_deck()
 
         # shuffle decks
-        self.market_deck.shuffle()
-        self.market_deck.shuffle()
-        self.market_deck.shuffle()
+        if shuffle:
+            self.market_deck.shuffle()
+            self.market_deck.shuffle()
+            self.market_deck.shuffle()
 
         # set up game entities
         self.market = Market(game_settings, no_players = no_players, image_path = self.asset_path)
         self.companies = [Company(game_settings, self.market) for i in range(no_players)]
         self.players = [Player(game_settings, self.companies[i]) for i in range(no_players)]
 
+        # add starting cards
+        for company in self.companies:
+            company.rent_building(BuildingCard(game_settings.factory_to_prod, 0, 0, game_settings.factory_cost)) # add factory
+            company.rent_building(BuildingCard(0, 0, game_settings.office_to_desk, game_settings.office_cost)) # add office
+
     def run_turn(self, render = False, debug = 0):
         if debug:
-            print('--- running turn ' + str(self.turn_number) + ', starting market strength: ' + str(self.market.current_strength) + ', market deck size: ' + str(len(self.market_deck.cards)) + ', building deck size: ' + str(len(self.building_deck.cards)) + ', employee deck size: ' + str(len(self.employee_deck.cards)) + ' ---')
+            print('TURN ' + str(self.turn_number) + ': Starting Market Strength: ' + str(self.market.current_strength))
             
         # Draw cards for turn
         market_card = self.market_deck.take_N_from_top(1)[0]
         building_pool = self.building_deck.take_N_from_top(3)
         employee_pool = self.employee_deck.take_N_from_top(5)
+        # apply market move card
+        self.market.apply_market_move(market_card.value)
+
+        if debug:
+            market_str = '-- MKT Card | ' + str(market_card) + ' | -> Current Market Strength: ' + str(self.market.current_strength)
+            building_pool_str, employee_pool_str = '-- BUD Pool | ', '-- EMP Pool | '
+            i = 0
+            for b in building_pool:
+                building_pool_str += 'B' + str(i) + ' ' +str(b) + ' | '
+                i += 1
+            i = 0
+            for e in employee_pool:
+                employee_pool_str += 'E' + str(i) + ' ' + str(e) + ' | '
+                i+=1
+            print(market_str + '\n' + building_pool_str + '\n' + employee_pool_str)
 
         if render:
             self.render_current_turn_cards(market_card, building_pool, employee_pool)
 
-        # apply market move card
-        self.market.apply_market_move(market_card.value)
-
+        # calc current desirability
         player_desirabilities = []
         for p in range(self.no_players):
-            p_des = random.choice([1,2,3,4,5]) # replace with some
-            player_desirabilities.append(p_des)
+            is_valid, current_p_des = self.companies[p].calculate_desirability(self.companies[p].employees, self.companies[p].current_price)
+            player_desirabilities.append(current_p_des)
+        
+        # calc current net income
+        player_current_nets = []
+        for p in range(self.no_players):
+            total_desirability = sum(player_desirabilities)
+            current_hand_dic = self.companies[p].get_hand_dic()
+            is_valid, current_p_net = self.companies[p].calculate_net(self.companies[p].employees, self.companies[p].buildings, self.companies[p].current_price, self.market.current_strength, total_desirability, max([0, debug-1]))
+            
+            if debug:
+                print('-- P' + str(p) + ', start hand: ' + str(current_hand_dic) + ', cur des: ' + str(current_p_des) + ', tot des:' +  str(total_desirability) + ', cur net: ' + str(current_p_net))
+                
+            player_current_nets.append(current_p_net)
+        
+        # find move
+        new_player_desirabilities = []
+        for p in range(self.no_players):
+            player = self.players[p]
+            company = self.companies[p]
+            other_player_des = total_desirability - player_desirabilities[p]
+            best_emp_combo, best_bud_idx, best_price, best_net = player.find_move(company, employee_pool, building_pool, self.market.current_strength, other_players_des = other_player_des, debug = 0)
+            
+            # hire employee into hand
+            emps = []
+            for ind in best_emp_combo:
+                emps.append(employee_pool[ind])
+            for emp in emps:
+                company.hire_employee(emp)
+                employee_pool.remove(emp) # remove them from the pool
+            # hire building into hand
+            if best_bud_idx != -1:
+                bud = building_pool[best_bud_idx]
+                company.rent_building(bud)
+                building_pool.remove(bud) # remove them from the pool
+            # update current price
+            company.current_price = best_price
+            
+            valid, test_des = company.calculate_desirability(company.employees, best_price, debug)
+            new_player_desirabilities.append(test_des)
+
+            if debug:
+                is_valid, best_net = company.calculate_net(company.employees, company.buildings, best_price, self.market.current_strength, other_player_des+test_des, max([0, debug-1]))
+                new_hand_dic = self.companies[p].get_hand_dic()
+                print('-- P' + str(p) + ', best move: pick employees: ' + str(best_emp_combo) + ', pick building: ' + str(best_bud_idx) + ', set price: ' + str(best_price))
+                print('-- P' + str(p) + ', final hand: ' + str(new_hand_dic) + ', new des: ' + str(test_des) + ', tot des:' +  str(other_player_des+test_des) + ', targ net: ' + str(best_net))
+                
+        # calculate final demands and net income
+        final_total_desirability = sum(new_player_desirabilities)
+        for p in range(self.no_players):
+            company = self.companies[p]
+            valid, final_p_net = company.calculate_net(company.employees, company.buildings, company.current_price, self.market.current_strength, final_total_desirability, max([0, debug-1]))
+            player_current_nets[p] = final_p_net
+            if debug:
+                print('-- P' + str(p) + ', fin des: ' + str(new_player_desirabilities[p]) + ', tot des:' +  str(final_total_desirability) + ', fin net: ' + str(final_p_net))
 
         if render:
             self.market.render(player_desirabilities = player_desirabilities)
@@ -870,11 +961,9 @@ class Game:
         self.employee_deck.add_N_to_bottom(employee_pool)
 
         if debug:
-            print('--- finished turn ' + str(self.turn_number) + ', ending market strength: ' + str(self.market.current_strength) + ', market deck size: ' + str(len(self.market_deck.cards)) + ', building deck size: ' + str(len(self.building_deck.cards)) + ', employee deck size: ' + str(len(self.employee_deck.cards)) + ' ---')
-
+            print()
         self.turn_number += 1
         
-
     def build_market_deck(self):
         markets = ['market_up','market_down','market_big_up','market_big_down']
         art_imgs, art_idxs, art_max_idxs = {}, {}, {}
