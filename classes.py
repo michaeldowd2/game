@@ -4,6 +4,7 @@ import math
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 from os import listdir
 from os.path import join
 from matplotlib import patches
@@ -287,6 +288,132 @@ class MarketCard:
         elif self.value == 2:
             return random.choice(['Economic Boom', 'Stock Market Boom','New Tech Discovery','New Resources Discovered'])
         return ''
+
+class MappingCard:
+    def __init__(self, name = '', x_name = '', y_name = '', x_values = [], y_values = [], value_logic = 'demand', max_output = 1, image_path = ''):
+        self.name = name
+        self.x_name = x_name
+        self.y_name = y_name
+        self.x_values = x_values
+        self.y_values = y_values
+        self.value_logic = value_logic
+        self.max_output = max_output
+        self.image_path = image_path
+        self.values = self.generate_values()
+        self.title = self.generate_title()
+        self.subtitle = self.generate_subtitle()
+
+    def get_value(self, x, y):
+        if x in self.x_values and y in self.y_values:
+            return self.values[x][y]
+        if x not in self.x_values:
+            if x < min(self.x_values):
+                x = min(self.x_values)
+            else:
+                x = max(self.x_values)
+        if y not in self.y_values:
+            if y < min(self.y_values):
+                y = min(self.y_values)
+            else:
+                y = max(self.y_values)
+        return self.values[x][y]
+    
+    def generate_values(self):
+        res = {}
+        for x in self.x_values:
+            x_res = {}
+            for y in self.y_values:
+                value = 0
+                if self.value_logic == 'demand': 
+                    if x <= y:
+                        prop_demand = round(x / y * self.max_output)
+                        value = min([x, prop_demand])
+                        # print('max output: ' + str(self.max_output) + ', x: ' + str(x) + ', y: ' + str(y) + ', prop_demand: ' + str(prop_demand) + ', value: ' + str(value))
+                x_res[y] = value
+            res[x] = x_res
+        return res
+
+    def generate_title(self):
+        if self.value_logic == 'demand':
+            return 'Property: Shop $2'
+        return ''
+    
+    def generate_subtitle(self):
+        if self.value_logic == 'demand':
+            return 'Units Sold: ' + str(self.max_output)
+        return ''
+    
+    def get_start_x_and_width(self, index):
+        x_mod, w_mod, x_mods, w_mods = 0, 0, {0:0,1:0,2:-6,3:-10,4:0}, {0:0,1:-6,2:-4,3:10,4:0} # modify start points and widthsof rectangles
+        if index in x_mods:
+            x_mod = x_mods[index]
+        if index in w_mods:
+            w_mod = w_mods[index]
+        return 113 * index + x_mod, 113 + w_mod
+    
+    def get_start_y_and_height(self, index):
+        y_mod, h_mod, y_mods, h_mods = 0, 0, {0:0,1:2,2:8,3:4,4:2}, {0:2,1:6,2:-4,3:-2,4:-2} # modify start points and heights of rectangles
+        if index in y_mods:
+            y_mod = y_mods[index]
+        if index in h_mods:
+            h_mod = h_mods[index]
+        return 113 * index + y_mod, 113 + h_mod
+
+    def render(self, ax = None, save_path = '', player_desirabilities = []):
+        
+        fontsize1, fontsize2, padding, fontsize3 = 8, 12, 128, 10
+        w, h = 760, 760
+        
+        font = load_font(
+            font_url="https://github.com/google/fonts/blob/main/apache/specialelite/SpecialElite-Regular.ttf?raw=true"
+        )
+        
+        if ax == None:
+            plt.figure(figsize=(w/100, h/100), dpi=100)
+            ax = plt.gca()
+    
+        ax.set_xlim(0, w)
+        ax.get_xaxis().set_ticks([])
+        ax.set_ylim(0, h)
+        ax.get_yaxis().set_ticks([])
+    
+        if self.image_path != '':
+            img = plt.imread(self.image_path)
+            imgplot = ax.imshow(img, extent=(0, w, 0, w))
+        else:
+            imgplot = ax.imshow(np.zeros((w, w)), extent=(0, w, 0, w))
+           
+        for i, x in enumerate(self.x_values):
+            start_x, width = self.get_start_x_and_width(i)
+            for j, y in enumerate(self.y_values):
+                start_y, height = self.get_start_y_and_height(j)
+                # y axis labels
+                if i == 0:
+                    lab = str(y)
+                    if j == 0:
+                        lab = '<=' + lab
+                    elif j == len(self.y_values) - 1:
+                        lab = '>=' + lab
+                    ax.text(start_x - 16, start_y + height / 2, lab, fontsize = fontsize3, ha = 'right', va = 'center', font = font)
+                # x axis labels
+                if j == 0:
+                    ax.text(start_x + width / 2, start_y - 16, str(x), fontsize = fontsize3, ha = 'center', va = 'top', font = font)
+                
+                # values
+                value = self.get_value(x, y)
+                if value > 0:
+                    rect = patches.Rectangle((start_x, start_y), width, height, linewidth=1, edgecolor='black', facecolor='black', alpha = 0.3)
+                    ax.add_patch(rect)
+                    text = str(value)
+                    ax.text(start_x + width / 2, start_y + height / 2, text, fontsize = fontsize2, ha = 'center', va = 'center', color = 'white', font = font)
+    
+        ax.text(-56, h/2-84, self.y_name, fontsize = fontsize1, ha='right', va='center', font = font, rotation = 'vertical')
+        ax.text(w/2, -84, self.x_name, fontsize = fontsize1, ha='center', va='top', font = font, rotation = 'horizontal')
+        ax.text(16, h - 16, self.title, fontsize = fontsize2, ha = 'left', va = 'top', font = font, color = 'white')
+        ax.text(16, h - 122, self.subtitle, fontsize = fontsize1, ha = 'left', va = 'top', font = font, color = 'white')
+
+        if save_path != '':
+            plt.savefig(save_path, dpi=100, bbox_inches='tight') 
 
 class Company:
     def __init__(self, game_settings, market):
@@ -851,6 +978,9 @@ class Game:
         self.market_deck = self.build_market_deck()
         self.building_deck = self.build_building_deck()
         self.employee_deck = self.build_employee_deck()
+        
+        # demand mapping deck
+        self.demand_mapping_deck = self.build_demand_mapping_deck()
 
         # shuffle decks
         if shuffle:
@@ -974,6 +1104,17 @@ class Game:
             print()
         self.turn_number += 1
         
+    def build_demand_mapping_deck(self):
+        cards = []
+        x_values = [1,2,3,4,5]
+        y_combos = [[2,3,4,5,6], [2,3,4,5,6], [4,5,6,7,8], [4,5,6,7,8], [6,7,8,9,10], [6,7,8,9,10]]
+        v_combos = [4, 6, 4, 6, 6, 8]
+        for i in range(len(y_combos)):
+            y_values = y_combos[i]
+            v = v_combos[i]
+            cards.append(MappingCard(name = 'actual demand', x_name = 'player demand', y_name = 'total demand', x_values = x_values, y_values = y_values, value_logic = 'demand', max_output = v))
+        return Deck(cards)
+
     def build_market_deck(self):
         markets = ['market_up','market_down','market_big_up','market_big_down']
         art_imgs, art_idxs, art_max_idxs = {}, {}, {}
