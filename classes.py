@@ -301,6 +301,7 @@ class MappingCard:
         self.image_path = image_path
         self.values = self.generate_values()
         self.title = self.generate_title()
+        self.competition_value = self.get_competition_value()
         self.subtitle = self.generate_subtitle()
 
     def get_value(self, x, y):
@@ -324,23 +325,34 @@ class MappingCard:
             x_res = {}
             for y in self.y_values:
                 value = 0
-                if self.value_logic == 'demand': 
+                if self.value_logic == 'unit_sold': 
                     if x <= y:
                         prop_demand = round(x / y * self.max_output)
                         value = min([x, prop_demand])
                         # print('max output: ' + str(self.max_output) + ', x: ' + str(x) + ', y: ' + str(y) + ', prop_demand: ' + str(prop_demand) + ', value: ' + str(value))
+                elif self.value_logic in ['product_strength']:
+                    value = math.ceil((6 - y) * x / 5)
+                elif self.value_logic in ['demand']:
+                    value = math.ceil(x * y / 5)
+                elif self.value_logic in ['unit_cost']:
+                    value = math.ceil(( 6 - x) * y / 5)
+                elif self.value_logic in ['unit_profit']:
+                    value = math.ceil((6 - x) * y / 5)
                 x_res[y] = value
             res[x] = x_res
         return res
 
+    def get_competition_value(self):
+        return 2 # calculate this
+    
     def generate_title(self):
-        if self.value_logic == 'demand':
-            return 'Property: Shop $2'
-        return ''
+        if self.value_logic == 'unit_sold':
+            return 'Shop, Cost $2'
+        return self.name
     
     def generate_subtitle(self):
-        if self.value_logic == 'demand':
-            return 'Units Sold: ' + str(self.max_output)
+        if self.value_logic == 'unit_sold':
+            return 'Max: ' + str(self.max_output) + ', Competition: ' + str(self.competition_value) + '/3'
         return ''
     
     def get_start_x_and_width(self, index):
@@ -359,7 +371,7 @@ class MappingCard:
             h_mod = h_mods[index]
         return 113 * index + y_mod, 113 + h_mod
 
-    def render(self, ax = None, save_path = '', player_desirabilities = []):
+    def render(self, ax = None, save_path = ''):
         
         fontsize1, fontsize2, padding, fontsize3 = 8, 12, 128, 10
         w, h = 760, 760
@@ -423,7 +435,19 @@ class Company:
         self.buildings = []
         self.current_price = 5
         self.capital = game_settings.player_starting_cap
-                
+        
+        # mapping cards
+        self.product_strength_mapping = self.generate_default_mapping_card(name = 'Product Strength', x_name = 'Marketing', y_name = 'Price', value_logic = 'product_strength')
+        self.demand_mapping = self.generate_default_mapping_card(name = 'Demand', x_name = 'Product Strength', y_name = 'Market', value_logic = 'demand')
+        self.unit_cost_mapping = self.generate_default_mapping_card(name = 'Unit Cost', x_name = 'Engineering', y_name = 'Market', value_logic = 'unit_cost')
+        self.unit_profit_mapping = self.generate_default_mapping_card(name = 'Unit Profit', x_name = 'Unit Cost', y_name = 'Price', value_logic = 'unit_profit')
+
+    def generate_default_mapping_card(self, name, x_name, y_name, value_logic):
+        cards = []
+        x_values = [1,2,3,4,5]
+        y_values = [1,2,3,4,5]
+        return MappingCard(name = name, x_name = x_name, y_name = y_name, x_values = x_values, y_values = y_values, value_logic = value_logic, max_output = 5)
+
     def hire_employee(self, employee, sign_on_bonus = 0):
         self.capital -= sign_on_bonus
         self.employees.append(employee)
@@ -515,6 +539,16 @@ class Company:
         
         return True, desirability
 
+    def calculate_desirability_new(self, employees, price = None, market_strength = None, debug = 0):
+        if price == None:
+            price = self.current_price
+        if market_strength == None:
+            market_strength = self.market
+        operations, engineering, finance, marketing, employee_cost = self.get_employee_attributes(employees)
+        product_strength = self.product_strength_mapping.get_value(marketing, price)
+        desirability = self.demand_mapping.get_value(product_strength, market_strength)
+        return True, desirability
+
     def calculate_net(self, employees, buildings, price, market_strength, total_desirability, debug = 0):
         operations, engineering, finance, marketing, employee_cost = self.get_employee_attributes(employees)
         production, storage, desks, building_cost = self.get_building_attributes(buildings)
@@ -587,6 +621,71 @@ class Company:
             print(' ---- E. (actual gross: ' + str(actual_gross) + ' - total cost: ' + str(total_cost) +  ') = net income: ' + str(net))
             
         return True, int(net)
+
+    def calculate_net_new(self, employees, buildings, price = None, market_strength = None, total_demand = None, debug = 0):
+        if price == None:
+            price = self.current_price
+        if market_strength == None:
+            market_strength = self.market
+
+        operations, engineering, finance, marketing, employee_cost = self.get_employee_attributes(employees)
+        production, storage, desks, building_cost = self.get_building_attributes(buildings)
+        total_cost = employee_cost + building_cost
+
+        # company properties
+        product_strength = self.product_strength_mapping.get_value(marketing, price)
+        demand = self.demand_mapping.get_value(product_strength, market_strength)
+        unit_cost = self.unit_cost_mapping.get_value(engineering, market_strength)
+        unit_profit = self.unit_profit_mapping.get_value(unit_cost, price)
+
+        # maxes
+        unit_cost, max_gross, max_buildings = 0, 0, 0
+        if operations in self.game_settings.operations_to_max_buildings:
+            max_buildings = self.game_settings.operations_to_max_buildings[operations]
+        else:
+            max_buildings = max(self.game_settings.operations_to_max_buildings.values())
+            
+        if len(buildings) > max_buildings:
+            if debug:
+                print('invalid company: too many buildings: ' + str(len(buildings)) + ', max buildings: ' + str(max_buildings))
+            return False, 0
+        if len(employees) > desks:
+            if debug:
+                print('invalid company: too many employees: ' + str(len(employees)) + ', desks: ' + str(desks))
+            return False, 0
+
+        if finance in self.game_settings.finance_to_max_gross:
+            max_gross = self.game_settings.finance_to_max_gross[finance]
+        else:
+            max_gross = max(self.game_settings.finance_to_max_gross.values())
+        
+        if total_demand == -1:
+            total_demand = demand # this is the test case or a single player game
+        
+        # this needs to change to use the new demand -> units sold mapping cards
+        units_sold = self.market.get_player_demand(market_strength, total_demand, demand, False)
+
+
+        potential_gross = demand * unit_profit
+        actual_gross = min([potential_gross, max_gross])
+        net = actual_gross - total_cost
+        if debug:
+            print(' ---- A. max buildings: ' + str(max_buildings) + ', max employees: ' + str(desks) + ', max gross: ' + str(max_gross))
+            print(' ---- B. (marketing: ' + str(marketing) + ' -> price: ' + str(price) + ' -> product strength: ' + str(product_strength))
+            print(' ---- C. product strength: ' + str(product_strength) + ' -> market strength: ' + str(market_strength) + ' -> demand: ' + str(demand) + ' -> total demand: ' + str(total_demand) + ' -> unit sold: ' + str(units_sold))
+            print(' ---- D. (price: ' + str(price) + ' - unit cost: ' + str(unit_cost) + ') = unit profit: ' + str(unit_profit) + ' x units sold: ' + str(units_sold) + ' = potential gross: ' + str(potential_gross) + '/' + str(max_gross))
+            print(' ---- E. (actual gross: ' + str(actual_gross) + ' - total cost: ' + str(total_cost) +  ') = net income: ' + str(net))
+            
+        return True, int(net)
+
+    def render(self):
+        fig, axs = plt.subplots(2, 2)
+        fig.set_figwidth(5)
+        fig.suptitle('Player Company') # or plt.suptitle('Main title')
+        self.product_strength_mapping.render(ax = axs[0][0])
+        self.demand_mapping.render(ax = axs[1][0])
+        self.unit_profit_mapping.render(ax = axs[0][1])
+        self.unit_cost_mapping.render(ax = axs[1][1])
 
 class GameSettings:
     def __init__(self, 
@@ -980,7 +1079,7 @@ class Game:
         self.employee_deck = self.build_employee_deck()
         
         # demand mapping deck
-        self.demand_mapping_deck = self.build_demand_mapping_deck()
+        self.units_sold_mapping_deck = self.build_units_sold_mapping_deck()
 
         # shuffle decks
         if shuffle:
@@ -1104,7 +1203,7 @@ class Game:
             print()
         self.turn_number += 1
         
-    def build_demand_mapping_deck(self):
+    def build_units_sold_mapping_deck(self):
         cards = []
         x_values = [1,2,3,4,5]
         y_combos = [[2,3,4,5,6], [2,3,4,5,6], [4,5,6,7,8], [4,5,6,7,8], [6,7,8,9,10], [6,7,8,9,10]]
@@ -1112,7 +1211,17 @@ class Game:
         for i in range(len(y_combos)):
             y_values = y_combos[i]
             v = v_combos[i]
-            cards.append(MappingCard(name = 'actual demand', x_name = 'player demand', y_name = 'total demand', x_values = x_values, y_values = y_values, value_logic = 'demand', max_output = v))
+            cards.append(MappingCard(name = 'Units Sold', x_name = 'player demand', y_name = 'total demand', x_values = x_values, y_values = y_values, value_logic = 'unit_sold', max_output = v))
+        return Deck(cards)
+
+    def build_mapping_deck(self, count, name, value_logic):
+        cards = []
+        x_combos = [[1,2,3,4,5]]
+        y_combos = [[1,2,3,4,5]]
+        for c in range(count):
+            for i in range(len(x_values)):
+                x_values, y_values = x_combos[i], y_combos[i]
+                cards.append(MappingCard(name = name, x_name = 'Marketing', y_name = 'Price', x_values = x_values, y_values = y_values, value_logic = value_logic, max_output = 5))
         return Deck(cards)
 
     def build_market_deck(self):
