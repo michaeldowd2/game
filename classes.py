@@ -10,6 +10,9 @@ from os.path import join
 from matplotlib import patches
 from pyfonts import load_font
 
+ASSET_PATH = join('assets', 'theme_1')
+IMG_IDX = {'demand':0, 'shop':0, 'product':0, 'unit_cost':0, 'unit_profit':0, 'employees_male':0, 'employees_female':0}
+
 class Deck:
     def __init__(self, cards):
         self.cards = cards
@@ -24,7 +27,8 @@ class Deck:
     
     def render(self, cards):
         fig, axs = plt.subplots(1, len(cards))
-        fig.set_figwidth(15)
+        fig.set_figwidth(12)
+        fig.set_figheight(3)
         
         for i, card in enumerate(cards):
             if card is not None:
@@ -123,7 +127,7 @@ class BuildingCard:
         return plt 
 
 class EmployeeCard:
-    def __init__(self, operations = 0, finance = 0, engineering = 0, marketing = 0, cost = 1, gender = 'male', image_path = ''):
+    def __init__(self, operations = 0, finance = 0, engineering = 0, marketing = 0, cost = 1, gender = 'male'):
         self.cost = cost
         self.operations = operations
         self.finance = finance
@@ -134,7 +138,12 @@ class EmployeeCard:
         self.gender = gender
         self.name = self.random_name()
         self.traits = self.random_traits()
-        self.image_path = image_path
+
+        category = 'employees_' + self.gender
+        imgs = listdir(join(ASSET_PATH, category))
+        img_idx = IMG_IDX[category]
+        IMG_IDX[category] += 1
+        self.image_path = join(ASSET_PATH, category, imgs[img_idx % len(imgs)])
 
     def get_department(self):
         max_val, max_attr = 0, ''
@@ -167,7 +176,7 @@ class EmployeeCard:
             return random.choice(first_names_female) + " " + random.choice(last_names)
     
     def render(self, ax = None, save_path = ''):
-        low_res_props = {'w':256, 'h':339, 'p':4, 'r':22, 'fs1': 9, 'fs2': 10, 'fs3': 8}
+        low_res_props = {'w':256, 'h':339, 'p':4, 'r':26, 'fs1': 8, 'fs2': 9, 'fs3': 7}
         high_res_props = {'w':1024, 'h':1365, 'p':12, 'r':94, 'fs1': 36, 'fs2': 40, 'fs3': 28}
 
         props = low_res_props
@@ -194,18 +203,18 @@ class EmployeeCard:
 
         # set string values
         l1 = 'O: ' + str(self.operations) + ', F: ' + str(self.finance) + ', E: ' + str(self.engineering) + ', M: ' + str(self.marketing) + ', $' + str(self.cost)
-        l2 = 'Name: ' + self.name
-        l3 = 'Department: ' + self.department.capitalize()
-        l4 = 'Skills: '
+        l2 = self.name
+        l3 = self.department.capitalize()
+        l4 = ''
         for trait in self.traits:
             l4 += trait + ', '
         l4 = l4[:-2]
         
         # add to plot
         ax.text(p, h-p, l1, fontsize=props['fs1'], ha='left', va='top',**csfont)
-        ax.text(p, h-r, l2, fontsize=props['fs2'], ha='left', va='top',**csfont)
-        ax.text(p, h-2*r, l3, fontsize=props['fs2'], ha='left', va='top',**csfont)
-        ax.text(p, w+p, l4, fontsize=props['fs3'], ha='left', va='bottom',**csfont)
+        ax.text(w/2, h-r, l2, fontsize=props['fs2'], ha='center', va='top',**csfont)
+        ax.text(w/2, w+p+14, l3, fontsize=props['fs3'], ha='center', va='bottom',**csfont)
+        ax.text(w/2, w+p, l4, fontsize=props['fs3'], ha='center', va='bottom',**csfont)
         
         if save_path != '':
             plt.savefig(save_path, dpi=100, bbox_inches='tight') 
@@ -290,19 +299,25 @@ class MarketCard:
         return ''
 
 class MappingCard:
-    def __init__(self, name = '', x_name = '', y_name = '', x_values = [], y_values = [], value_logic = 'demand', max_output = 1, image_path = ''):
+    def __init__(self, name = '', x_name = '', y_name = '', x_values = [], y_values = [], type = 'demand', max_output = 1, render_y_axis = True, large_y_offset = False):
         self.name = name
         self.x_name = x_name
         self.y_name = y_name
         self.x_values = x_values
         self.y_values = y_values
-        self.value_logic = value_logic
+        self.type = type
         self.max_output = max_output
-        self.image_path = image_path
         self.values = self.generate_values()
         self.title = self.generate_title()
         self.competition_value = self.get_competition_value()
         self.subtitle = self.generate_subtitle()
+        self.render_y_axis = render_y_axis
+        self.large_y_offset = large_y_offset
+
+        imgs = listdir(join(ASSET_PATH, self.type))
+        img_idx = IMG_IDX[type]
+        IMG_IDX[type] += 1
+        self.image_path = join(ASSET_PATH, self.type, imgs[img_idx % len(imgs)])
 
     def get_value(self, x, y):
         if x in self.x_values and y in self.y_values:
@@ -320,24 +335,23 @@ class MappingCard:
         return self.values[x][y]
     
     def generate_values(self):
-        res = {}
+        res, max_price = {}, max(self.y_values)
         for x in self.x_values:
             x_res = {}
             for y in self.y_values:
                 value = 0
-                if self.value_logic == 'unit_sold': 
+                if self.type == 'shop': 
                     if x <= y:
                         prop_demand = round(x / y * self.max_output)
                         value = min([x, prop_demand])
-                        # print('max output: ' + str(self.max_output) + ', x: ' + str(x) + ', y: ' + str(y) + ', prop_demand: ' + str(prop_demand) + ', value: ' + str(value))
-                elif self.value_logic in ['product_strength']:
-                    value = math.ceil((6 - y) * x / 5)
-                elif self.value_logic in ['demand']:
+                elif self.type == 'product':
+                    value = math.ceil((max_price + 1 - y) * x / 5)
+                elif self.type == 'demand':
                     value = math.ceil(x * y / 5)
-                elif self.value_logic in ['unit_cost']:
-                    value = math.ceil(( 6 - x) * y / 5)
-                elif self.value_logic in ['unit_profit']:
+                elif self.type == 'unit_cost':
                     value = math.ceil((6 - x) * y / 5)
+                elif self.type == 'unit_profit':
+                    value = math.ceil(y - x)
                 x_res[y] = value
             res[x] = x_res
         return res
@@ -346,13 +360,13 @@ class MappingCard:
         return 2 # calculate this
     
     def generate_title(self):
-        if self.value_logic == 'unit_sold':
-            return 'Shop, Cost $2'
+        if self.type == 'shop':
+            return 'Shop'
         return self.name
     
     def generate_subtitle(self):
-        if self.value_logic == 'unit_sold':
-            return 'Max: ' + str(self.max_output) + ', Competition: ' + str(self.competition_value) + '/3'
+        if self.type == 'unit_sold':
+            return 'Cost: $2, Max: ' + str(self.max_output)
         return ''
     
     def get_start_x_and_width(self, index):
@@ -373,12 +387,14 @@ class MappingCard:
 
     def render(self, ax = None, save_path = ''):
         
-        fontsize1, fontsize2, padding, fontsize3 = 8, 12, 128, 10
-        w, h = 760, 760
+        fontsize1, y_axis_fontsize, fontsize3 = 8, 8, 12
+        w, h, cell = 760, 760, 113
+        y_axis_offset = -4
+        if self.large_y_offset:
+            y_axis_offset = -40
+            y_axis_fontsize = 10
         
-        font = load_font(
-            font_url="https://github.com/google/fonts/blob/main/apache/specialelite/SpecialElite-Regular.ttf?raw=true"
-        )
+        font = load_font(font_url="https://github.com/google/fonts/blob/main/apache/specialelite/SpecialElite-Regular.ttf?raw=true")
         
         if ax == None:
             plt.figure(figsize=(w/100, h/100), dpi=100)
@@ -399,30 +415,37 @@ class MappingCard:
             start_x, width = self.get_start_x_and_width(i)
             for j, y in enumerate(self.y_values):
                 start_y, height = self.get_start_y_and_height(j)
+                start_y = start_y + 195
+
                 # y axis labels
-                if i == 0:
+                if i == 0 and self.render_y_axis:
                     lab = str(y)
-                    if j == 0:
+                    if j == 0 and self.y_name.lower() != 'price' and self.y_name.lower() != 'market':
                         lab = '<=' + lab
-                    elif j == len(self.y_values) - 1:
+                    elif j == len(self.y_values) - 1 and self.y_name.lower() != 'price' and self.y_name.lower() != 'market':
                         lab = '>=' + lab
-                    ax.text(start_x - 16, start_y + height / 2, lab, fontsize = fontsize3, ha = 'right', va = 'center', font = font)
+                    ax.text(y_axis_offset, start_y + height / 2, lab, fontsize = y_axis_fontsize, ha = 'right', va = 'center', font = font)
+                
                 # x axis labels
-                if j == 0:
-                    ax.text(start_x + width / 2, start_y - 16, str(x), fontsize = fontsize3, ha = 'center', va = 'top', font = font)
+                if j == len(self.y_values) - 1:
+                    ax.text(start_x + width / 2, h + 8, str(x), fontsize = fontsize1, ha = 'center', va = 'bottom', font = font)
                 
                 # values
                 value = self.get_value(x, y)
-                if value > 0:
-                    rect = patches.Rectangle((start_x, start_y), width, height, linewidth=1, edgecolor='black', facecolor='black', alpha = 0.3)
+                if value != 0:
+                    rect = patches.Rectangle((start_x, start_y), width, height, linewidth=1, edgecolor='black', facecolor='black', alpha = 0.35)
                     ax.add_patch(rect)
                     text = str(value)
-                    ax.text(start_x + width / 2, start_y + height / 2, text, fontsize = fontsize2, ha = 'center', va = 'center', color = 'white', font = font)
-    
-        ax.text(-56, h/2-84, self.y_name, fontsize = fontsize1, ha='right', va='center', font = font, rotation = 'vertical')
-        ax.text(w/2, -84, self.x_name, fontsize = fontsize1, ha='center', va='top', font = font, rotation = 'horizontal')
-        ax.text(16, h - 16, self.title, fontsize = fontsize2, ha = 'left', va = 'top', font = font, color = 'white')
-        ax.text(16, h - 122, self.subtitle, fontsize = fontsize1, ha = 'left', va = 'top', font = font, color = 'white')
+                    ax.text(start_x + width / 2, start_y + height / 2, text, fontsize = fontsize3, ha = 'center', va = 'center', color = 'white', font = font)
+        
+        ax.text(w, h + 8, self.x_name, fontsize = fontsize1, ha='right', va='bottom', font = font, rotation = 'horizontal')
+        if self.render_y_axis:
+            ax.text(y_axis_offset, 0, self.y_name, fontsize = y_axis_fontsize, ha='right', va='bottom', font = font, rotation = 'vertical')
+       
+        rect = patches.Rectangle((0, 0), w, 48, linewidth=1, edgecolor='black', facecolor='black', alpha = 0.4)
+        ax.add_patch(rect)
+        ax.text(16, 0, self.title, fontsize = fontsize1, ha = 'left', va = 'bottom', font = font, color = 'white')
+        ax.text(w-16, 0, self.subtitle, fontsize = fontsize1, ha = 'right', va = 'bottom', font = font, color = 'white')
 
         if save_path != '':
             plt.savefig(save_path, dpi=100, bbox_inches='tight') 
@@ -437,16 +460,17 @@ class Company:
         self.capital = game_settings.player_starting_cap
         
         # mapping cards
-        self.product_strength_mapping = self.generate_default_mapping_card(name = 'Product Strength', x_name = 'Marketing', y_name = 'Price', value_logic = 'product_strength')
-        self.demand_mapping = self.generate_default_mapping_card(name = 'Demand', x_name = 'Product Strength', y_name = 'Market', value_logic = 'demand')
-        self.unit_cost_mapping = self.generate_default_mapping_card(name = 'Unit Cost', x_name = 'Engineering', y_name = 'Market', value_logic = 'unit_cost')
-        self.unit_profit_mapping = self.generate_default_mapping_card(name = 'Unit Profit', x_name = 'Unit Cost', y_name = 'Price', value_logic = 'unit_profit')
-
-    def generate_default_mapping_card(self, name, x_name, y_name, value_logic):
+        prices, markets = [4,5,6,7,8], [1,2,3,4,5]
+        self.product_mapping = MappingCard(name = 'Product', x_name = 'Brand', y_name = 'Price', x_values = [1,2,3,4,5], y_values = prices, type = 'product', max_output = 5, render_y_axis=False, large_y_offset=False)
+        self.demand_mapping = MappingCard(name = 'Demand: P', x_name = 'Product', y_name = 'Market', x_values = [1,2,3,4,5], y_values = markets, type = 'demand', max_output = 5, render_y_axis=False, large_y_offset=False)
+        self.unit_cost_mapping = MappingCard(name = 'Unit Cost', x_name = 'Ops', y_name = 'Market', x_values = [1,2,3,4,5], y_values = markets, type = 'unit_cost', max_output = 5, render_y_axis=True, large_y_offset=True)
+        self.unit_profit_mapping = MappingCard(name = 'Unit Profit', x_name = 'Unit Cost', y_name = 'Price', x_values = [1,2,3,4,5], y_values = prices, type = 'unit_profit', max_output = 5, render_y_axis=True, large_y_offset=True)
+    
+    def generate_default_mapping_card(self, name, x_name, y_name, type, render_y_axis = True, large_y_offset = False):
         cards = []
         x_values = [1,2,3,4,5]
         y_values = [1,2,3,4,5]
-        return MappingCard(name = name, x_name = x_name, y_name = y_name, x_values = x_values, y_values = y_values, value_logic = value_logic, max_output = 5)
+        return MappingCard(name = name, x_name = x_name, y_name = y_name, x_values = x_values, y_values = y_values, type = type, max_output = 5, render_y_axis=render_y_axis, large_y_offset=large_y_offset)
 
     def hire_employee(self, employee, sign_on_bonus = 0):
         self.capital -= sign_on_bonus
@@ -545,7 +569,7 @@ class Company:
         if market_strength == None:
             market_strength = self.market
         operations, engineering, finance, marketing, employee_cost = self.get_employee_attributes(employees)
-        product_strength = self.product_strength_mapping.get_value(marketing, price)
+        product_strength = self.product_mapping.get_value(marketing, price)
         desirability = self.demand_mapping.get_value(product_strength, market_strength)
         return True, desirability
 
@@ -633,7 +657,7 @@ class Company:
         total_cost = employee_cost + building_cost
 
         # company properties
-        product_strength = self.product_strength_mapping.get_value(marketing, price)
+        product_strength = self.product_mapping.get_value(marketing, price)
         demand = self.demand_mapping.get_value(product_strength, market_strength)
         unit_cost = self.unit_cost_mapping.get_value(engineering, market_strength)
         unit_profit = self.unit_profit_mapping.get_value(unit_cost, price)
@@ -680,9 +704,10 @@ class Company:
 
     def render(self):
         fig, axs = plt.subplots(2, 2)
-        fig.set_figwidth(5)
+        fig.set_figwidth(6)
+        fig.set_figheight(6)
         fig.suptitle('Player Company') # or plt.suptitle('Main title')
-        self.product_strength_mapping.render(ax = axs[0][0])
+        self.product_mapping.render(ax = axs[0][0])
         self.demand_mapping.render(ax = axs[1][0])
         self.unit_profit_mapping.render(ax = axs[0][1])
         self.unit_cost_mapping.render(ax = axs[1][1])
@@ -1204,24 +1229,14 @@ class Game:
         self.turn_number += 1
         
     def build_units_sold_mapping_deck(self):
+        
         cards = []
         x_values = [1,2,3,4,5]
         y_combos = [[2,3,4,5,6], [2,3,4,5,6], [4,5,6,7,8], [4,5,6,7,8], [6,7,8,9,10], [6,7,8,9,10]]
         v_combos = [4, 6, 4, 6, 6, 8]
         for i in range(len(y_combos)):
-            y_values = y_combos[i]
-            v = v_combos[i]
-            cards.append(MappingCard(name = 'Units Sold', x_name = 'player demand', y_name = 'total demand', x_values = x_values, y_values = y_values, value_logic = 'unit_sold', max_output = v))
-        return Deck(cards)
-
-    def build_mapping_deck(self, count, name, value_logic):
-        cards = []
-        x_combos = [[1,2,3,4,5]]
-        y_combos = [[1,2,3,4,5]]
-        for c in range(count):
-            for i in range(len(x_values)):
-                x_values, y_values = x_combos[i], y_combos[i]
-                cards.append(MappingCard(name = name, x_name = 'Marketing', y_name = 'Price', x_values = x_values, y_values = y_values, value_logic = value_logic, max_output = 5))
+            y_values, v = y_combos[i], v_combos[i]
+            cards.append(MappingCard(name = 'Units Sold', x_name = 'Demand: P', y_name = 'Demand: T', x_values = x_values, y_values = y_values, type = 'shop', max_output = v))
         return Deck(cards)
 
     def build_market_deck(self):
@@ -1257,10 +1272,6 @@ class Game:
     def build_employee_deck(self):
         # employee art images
         genders = ['male','female']
-        art_imgs, art_idxs = {}, {}
-        for gender in genders:
-            art_imgs[gender] = listdir(join(self.asset_path, 'employees_' + gender))
-            art_idxs[gender] = 0
         
         emps, count = [], 0
         for i in range(self.game_settings.no_emp_cards_per_attr):
@@ -1269,13 +1280,8 @@ class Game:
                 att_dic[attribute] = self.game_settings.base_emp_value
                 cost = self.game_settings.base_emp_cost
 
-                gender_ind, art_img = count % 2, ''
-                gender = genders[gender_ind]
-                if len(art_imgs[gender]) > 0:
-                    idx = art_idxs[gender] % len(art_imgs[gender])
-                    art_img = join(self.asset_path, 'employees_' + gender, art_imgs[gender][idx]) 
-                    art_idxs[gender] += 1
-                emps.append(EmployeeCard(att_dic['operations'], att_dic['engineering'], att_dic['finance'], att_dic['marketing'], cost = cost, gender = gender, image_path = art_img))
+                gender = genders[count % 2]
+                emps.append(EmployeeCard(att_dic['operations'], att_dic['engineering'], att_dic['finance'], att_dic['marketing'], cost = cost, gender = gender))
                 count += 1
         return Deck(emps)
 
