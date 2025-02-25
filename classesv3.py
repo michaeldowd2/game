@@ -75,7 +75,7 @@ class Deck:
         return self.cards
 
 class BuildingCard(Card):
-    def __init__(self, name = '', card_type = '', x_name = '', y_name = '', x_values = [], y_values = [], max_output = 5, max_min = 2):
+    def __init__(self, name = '', card_type = '', x_name = '', y_name = '', x_values = [], y_values = [], max_output = 5, max_min = 2, max_players = 1):
         super().__init__(name, card_type)
         self.x_name = x_name
         self.y_name = y_name
@@ -194,22 +194,32 @@ class BuildingCard(Card):
         if save_path != '':
             plt.savefig(save_path, dpi=100, bbox_inches='tight') 
 
+    def __str__(self):
+        if self.card_type == 'buy_card':
+            return 'BM'
+        elif  self.card_type == 'sell_card':
+            return 'SM'
+        elif  self.card_type == 'buy_process_card':
+            return 'BP'
+        elif  self.card_type == 'sell_process_card':
+            return 'SP'
+        return ''
+    
 class BoardCard(Card):
-    def __init__(self, name = '', card_type = '', resource = False, city = False, market_move = 0):
+    def __init__(self, name = '', card_type = '', max_emps = 3):
         super().__init__(name, card_type)
-        self.resource = resource
-        self.city = city
-        self.market_move = market_move
+        self.max_emps = max_emps
     
     def __str__(self):
-        if self.card_type == 'city':
-            return 'Cty'
-        elif self.card_type == 'resource':
-            return 'Rsc'
-        elif self.card_type == 'market_up':
-            return 'Mk+'
-        elif self.card_type == 'market_down':
-            return 'Mk-'
+        if self.card_type == 'farm':
+            return 'F' + str(self.max_emps)
+        elif self.card_type == 'commerce':
+            return 'C' + str(self.max_emps)
+        elif self.card_type == 'industry':
+            return 'I' + str(self.max_emps)
+        elif self.card_type == 'residential':
+            return 'R' + str(self.max_emps)
+        return ''
 
 class Company:
     def __init__(self, game_settings, market):
@@ -472,26 +482,28 @@ class Settings:
                  base_emp_value = 1,
                  emp_cost = 1,
                  bud_cost = 1,
-                 no_bud_cards_in_pool = 4,
-                 no_mine_cards = 12,
-                 no_factory_cards = 24,
-                 no_warehouse_cards =  12,
-                 no_hq_cards = 8,
-                 no_shop_cards = 12,
                  no_players_to_board_size = {1:16, 2:20, 3:24, 4:28},
-                 no_players_to_no_city_cards = {1:4, 2:5, 3:6, 4:7},
-                 no_players_to_no_resource_cards = {1:3, 2:4, 3:5, 4:6},
-                 no_players_to_no_market_up_cards = {1:6, 2:7, 3:8, 4:9},
-                 no_players_to_no_market_down_cards = {1:3, 2:4, 3:5, 4:6},
-                 market_strength_values = [1,2,3,4,5],
-                 starting_market_strength = 2,
-                 market_up_one_cards = 12,
-                 market_up_two_cards = 4,
-                 market_down_one_cards = 8,
-                 market_down_two_cards = 2,
+                 no_players_to_no_sell_cards = {1:4, 2:4, 3:6, 4:8},
+                 no_players_to_no_commerce_cards = {1:4, 2:5, 3:6, 4:7},
+                 no_players_to_no_industry_cards = {1:4, 2:5, 3:6, 4:7},
+                 no_players_to_no_farm_cards = {1:4, 2:5, 3:6, 4:7},
+                 no_players_to_no_residential_cards = {1:4, 2:5, 3:6, 4:7},
+                 hq_allowed_on = ['commerce','industry'],
+                 weak_buy_market_allowed_on = ['commerce','farm'],
+                 strong_buy_market_allowed_on = ['farm'],
+                 weak_sell_market_allowed_on = ['commerce','residential'],
+                 strong_sell_market_allowed_on = ['residential'],
+                 process_allowed_on = ['industry'],
+
+                 no_players_to_no_buy_cards = {1:4, 2:4, 3:6, 4:8},
                  player_starting_cap = 10,
-                 no_of_turns_in_game = 12
-                 ):
+                 no_of_turns_in_game = 12,
+                 buy_card_name = 'Wheat Market',
+                 buy_process_card_name = 'Mill',
+                 sell_process_card_name = 'Bakery',
+                 sell_card_name = 'Bread Market',
+                 process_card_name = 'Factory'
+            ):
         
         # card properties
         self.base_emp_value = base_emp_value
@@ -499,31 +511,33 @@ class Settings:
         self.bud_cost = bud_cost
 
         # deck properties
-        self.no_bud_cards_in_pool = no_bud_cards_in_pool
-
-        self.no_mine_cards = no_mine_cards
-        self.no_factory_cards = no_factory_cards
-        self.no_warehouse_cards = no_warehouse_cards
-        self.no_hq_cards = no_hq_cards
-        self.no_shop_cards = no_shop_cards
 
         self.no_players_to_board_size = no_players_to_board_size
-        self.no_players_to_no_city_cards = no_players_to_no_city_cards
-        self.no_players_to_no_resource_cards = no_players_to_no_resource_cards
-        self.no_players_to_no_market_up_cards = no_players_to_no_market_up_cards
-        self.no_players_to_no_market_down_cards = no_players_to_no_market_down_cards
+        self.no_players_to_no_sell_cards = no_players_to_no_sell_cards
+        self.no_players_to_no_buy_cards = no_players_to_no_buy_cards
 
-        # global market properties
-        self.market_strength_values = market_strength_values
-        self.starting_market_strength = starting_market_strength
-        self.market_up_one_cards = market_up_one_cards
-        self.market_up_two_cards = market_up_two_cards
-        self.market_down_one_cards = market_down_one_cards
-        self.market_down_two_cards = market_down_two_cards
+        self.no_players_to_no_commerce_cards = no_players_to_no_commerce_cards
+        self.no_players_to_no_industry_cards = no_players_to_no_industry_cards
+        self.no_players_to_no_farm_cards = no_players_to_no_farm_cards
+        self.no_players_to_no_residential_cards = no_players_to_no_residential_cards
+
+        self.hq_allowed_on = hq_allowed_on
+        self.weak_buy_market_allowed_on = weak_buy_market_allowed_on
+        self.strong_buy_market_allowed_on = strong_buy_market_allowed_on
+        self.weak_sell_market_allowed_on = weak_sell_market_allowed_on
+        self.strong_sell_market_allowed_on = strong_sell_market_allowed_on
+        self.process_allowed_on = process_allowed_on
 
         # player properties
         self.player_starting_cap = player_starting_cap
         self.no_of_turns_in_game = no_of_turns_in_game
+
+        # game names
+        self.buy_card_name = buy_card_name
+        self.buy_process_card_name = buy_process_card_name
+        self.sell_process_card_name = sell_process_card_name
+        self.sell_card_name = sell_card_name
+        self.process_card_name = process_card_name
 
 class Player:
     def __init__(self, game_settings, company):
@@ -692,7 +706,7 @@ class Board:
                     card_index = self.location_to_card_index[(r,c)]
                     card_str += str(self.cards[card_index])
                 else:
-                    card_str += '   '
+                    card_str += '  '
                 card_str += ' |'
                 s2 += card_str
             
@@ -701,13 +715,20 @@ class Board:
         return s
 
     def gen_board(self, size, style):
-        if size not in [16,20,24,28,32,36]:
+        if size not in [12,16,20,24,28,32,36]:
             raise Exception('board size not supported')
         if style not in  ['rectangle','diamond','linear']:
             raise Exception('board style not supported')
         
         row_c, col_c, row_not_in, col_not_in = 0, 0, [], []
-        if size == 16:
+        if size == 12:
+            if style == 'rectangle':
+                row_c, col_c, row_not_in, col_not_in = 4, 3, [], []
+            elif style == 'diamond':
+                row_c, col_c, row_not_in, col_not_in = 4, 4, [0,3], [0,3]
+            elif style == 'linear':
+                row_c, col_c, row_not_in, col_not_in = 4, 4, [1,2,3], [1,2]
+        elif size == 16:
             if style == 'rectangle':
                 row_c, col_c, row_not_in, col_not_in = 4, 4, [], []
             elif style == 'diamond':
@@ -780,25 +801,24 @@ class Game:
         self.game_settings = game_settings
         self.turn_number = 0
 
-        # building cards
-        mine_cards = self.gen_building_cards(game_settings.no_mine_cards, 'Mine', 'Connected Factories', 'Global Market', [1,2,3], game_settings.market_strength_values)
-        factory_cards = self.gen_building_cards(game_settings.no_factory_cards, 'Factory', '', 'Employees', [0], [0,1,2,3])
-        warehouse_cards = self.gen_building_cards(game_settings.no_warehouse_cards, 'Warehouse', 'Connected Factories', 'Employees', [1,2,3], [0,1,2,3])
-        shop_cards = self.gen_building_cards(game_settings.no_shop_cards, 'Shop', 'Plyr Demand', 'Ttl Demand', [1,2,3,4,5], [2,3,4,5,6])
-        hq_cards = self.gen_building_cards(game_settings.no_hq_cards, 'HQ', 'Price', 'Employees', [1,2,3,4,5], [0,1,2,3,3])
-        self.building_cards = mine_cards + factory_cards + warehouse_cards + shop_cards + hq_cards
+        # building cards - this is a deck that will be taken from arbitrarily
+        self.weak_buy_market_cards = self.gen_building_cards(100, game_settings.buy_card_name, 'weak_buy_market', game_settings.weak_buy_market_allowed_on, 'Total Spend', 'Player Spend', [2,3,4,5,6,7,8], [1,2,3,4], 2, 5)
+        self.strong_buy_market_cards = self.gen_building_cards(100, game_settings.buy_card_name, 'strong_buy_market', game_settings.strong_buy_market_allowed_on, 'Total Spend', 'Player Spend', [2,3,4,5,6,7,8], [1,2,3,4], 2, 7)
+        self.weak_sell_market_cards = self.gen_building_cards(100, game_settings.sell_card_name, 'weak_sell_market', game_settings.weak_sell_market_allowed_on, 'Total Price', 'Player Price', [4,5,6,7,8,9,10], [2,3,4,5,4], 2, 5)
+        self.strong_sell_market_cards = self.gen_building_cards(100, game_settings.sell_card_name, 'strong_sell_market', game_settings.strong_sell_market_allowed_on, 'Total Price', 'Player Price', [4,5,6,7,8,9,10], [2,3,4,5,4], 2, 7)
+        self.process_cards = self.gen_building_cards(100, game_settings.process_card_name, 'process', game_settings.process_allowed_on, 'Connected ' + game_settings.buy_card_name, 'Connected ' + game_settings.sell_card_name, [0,1,2], [0,1,2], 1, 10)
+        self.hq_cards = self.gen_building_cards(100, 'HQ', 'hq', game_settings.hq_allowed_on, 'Max Buildings', 'Max Employees', [0,3,6,9], [0,3,6,9], 1, 5)
         
         # board cards
-        no_city_cards = game_settings.no_players_to_no_city_cards[no_players]
-        no_resource_cards = game_settings.no_players_to_no_resource_cards[no_players]
-        no_market_up_cards = game_settings.no_players_to_no_market_up_cards[no_players]
-        no_market_down_cards = game_settings.no_players_to_no_market_down_cards[no_players]
-
-        city_cards = self.gen_board_cards(no_city_cards, 'City', 'city', False, True, 0)
-        resource_cards = self.gen_board_cards(no_resource_cards, 'Resource', 'resource', True, False, 0)
-        market_up_cards = self.gen_board_cards(no_market_up_cards, 'Market Up', 'market_up', False, False, 1)
-        market_down_cards = self.gen_board_cards(no_market_down_cards, 'Market Down', 'market_down', False, False, -1)
-        board_cards = city_cards + resource_cards + market_up_cards + market_down_cards
+        no_farm_cards = game_settings.no_players_to_no_farm_cards[no_players]
+        no_residential_cards = game_settings.no_players_to_no_residential_cards[no_players]
+        no_commerce_cards = game_settings.no_players_to_no_commerce_cards[no_players]
+        no_industry_cards = game_settings.no_players_to_no_industry_cards[no_players]
+        farm_cards = self.gen_board_cards(no_farm_cards, 'Farm', 'farm', 4)
+        residential_cards = self.gen_board_cards(no_residential_cards, 'Residential', 'residential', 4)
+        commerce_cards = self.gen_board_cards(no_commerce_cards, 'Commerce', 'commerce', 4)
+        industry_cards = self.gen_board_cards(no_industry_cards, 'Industry', 'industry', 4)
+        board_cards = farm_cards + residential_cards + commerce_cards + industry_cards
         if shuffle:
             board_cards = Deck(board_cards).shuffle()
         
@@ -806,7 +826,7 @@ class Game:
         self.board = Board(game_settings, no_players, board_cards, board_style)
         
         # set up game entities
-        self.market = Market(game_settings)
+        #self.market = Market(game_settings)
         #self.players = [Player(game_settings, self.companies[i]) for i in range(no_players)]
 
     def run_turn(self, render = False, debug = 0):
@@ -903,16 +923,16 @@ class Game:
             print()
         self.turn_number += 1
         
-    def gen_board_cards(self, count, name, card_type, resource, city, market_move):
+    def gen_board_cards(self, count, name, card_type, max_emps):
         cards = []
         for i in range(count):
-            cards.append(BoardCard(name = name, card_type = card_type, resource = resource, city = city, market_move = market_move))
+            cards.append(BoardCard(name = name, card_type = card_type, max_emps = max_emps))
         return cards
 
-    def gen_building_cards(self, count, name, x_name, y_name, x_values, y_values):
+    def gen_building_cards(self, count, name, card_type, allowed_on, x_name, y_name, x_values, y_values, max_players, max_output):
         cards = []
         for i in range(count):
-            cards.append(BuildingCard(name = name, x_name = x_name, y_name = y_name, x_values = x_values, y_values = y_values))
+            cards.append(BuildingCard(name = name, card_type = card_type, x_name = x_name, y_name = y_name, x_values = x_values, y_values = y_values, max_players = max_players, max_output = max_output))
         return cards
 
     def render_current_turn_cards(self, bud_cards):
