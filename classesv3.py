@@ -11,7 +11,7 @@ from matplotlib import patches
 from pyfonts import load_font
 
 ASSET_PATH = join('assets', 'theme_1')
-IMG_IDX = {'demand':0, 'shop':0, 'product':0, 'unit_cost':0, 'unit_profit':0, 'employees_male':0, 'employees_female':0, 'sales_district':0, 'material_district':0, 'production_district':0}
+IMG_IDX = {'demand':0, 'shop':0, 'product':0, 'unit_cost':0, 'unit_profit':0, 'employees_male':0, 'employees_female':0, 'sell_market':0, 'buy_market':0, 'process':0, 'hq':0}
 
 class Card:
     def __init__(self, name, card_type = ''):
@@ -75,22 +75,28 @@ class Deck:
         return self.cards
 
 class BuildingCard(Card):
-    def __init__(self, name = '', card_type = '', x_name = '', y_name = '', x_values = [], y_values = [], max_output = 5, max_min = 2, max_players = 1):
+    def __init__(self, name = '', card_type = '', x_name = '', y_name = '', max_output = 5, max_min = 2, max_players = 1, allowed_board_cards = []):
         super().__init__(name, card_type)
+        valid_building_card_types = ['none','buy_market','sell_market','process','hq']
+        if self.card_type not in valid_building_card_types:
+            raise ValueError(f'Invalid card type: {self.card_type}')
+
         self.x_name = x_name
         self.y_name = y_name
-        self.x_values = x_values
-        self.y_values = y_values
-
+        self.allowed_board_cards = allowed_board_cards
+        self.max_players = max_players
         self.max_output = max_output
+
         self.max_min = max_min
-        self.values = self.generate_values()
-        self.title = self.generate_title()
+        self.values, self.x_values, self.y_values = self.generate_values()
+        self.title = self.name
         self.subtitle = 'Cost $1'
 
     def get_value(self, x, y):
         if x in self.x_values and y in self.y_values:
             return self.values[x][y]
+        else:
+            return 0
         if x not in self.x_values:
             if x < min(self.x_values):
                 x = min(self.x_values)
@@ -104,25 +110,40 @@ class BuildingCard(Card):
         return self.values[x][y]
     
     def generate_values(self):
-        res, max_price = {}, max(self.y_values)
-        for x in self.x_values:
-            x_res = {}
-            for y in self.y_values:
-                min_row_min, max_row_max = min(self.x_values), max(self.x_values)
-                y_ratio = (y-1) / (max(self.y_values)-1)
-                x_ratio = (x-1) / (max(self.x_values)-1)
-                row_min = self.lerp(min_row_min, self.max_min, y_ratio)
-                row_max = self.lerp(self.max_min, max_row_max, y_ratio)
-                value = self.lerp(row_min, row_max, x_ratio)
-                x_res[y] = int(value)
-            res[x] = x_res
-        return res
+        if self.card_type == 'buy_market':
+            return self.generate_buy_market_values()
+        elif self.card_type == 'sell_market':
+            return self.generate_sell_market_values()
+        elif self.card_type == 'process':
+            return self.generate_process_values()
+        else:
+            return {}, [], []
 
-    def lerp(self, row_min, row_max, ratio):
-        return (row_max - row_min) * ratio + row_min 
+    def generate_process_values(self):
+        res = {
+            0:{0:0,1:2,2:4},
+            1:{0:2,1:4,2:6},
+            2:{0:4,1:6,2:8}
+        }
+        return res, [0,1,2], [0,1,2]
+
+    def generate_sell_market_values(self):
+        res = {
+            2:{2:6,4:4,5:5,6:6,7:7},
+            3:{3:4,4:2,5:3,6:4,7:5,8:6},
+            4:{4:2,5:1,6:2,7:3,8:4,9:5},
+            5:{7:1,8:2,9:3,10:4}
+        }
+        return res, [2,3,4,5], [2,3,4,5,6,7,8,9,10]
     
-    def generate_title(self):
-        return self.name
+    def generate_buy_market_values(self):
+        res = {
+            1:{1:5,2:4,3:3,4:2,5:1},
+            2:{2:6,3:5,4:4,5:3,6:2},
+            3:{3:7,4:6,5:5,6:4,7:3},
+            4:{4:8,5:7,6:6,7:5,8:4}
+        }
+        return res, [1,2,3,4], [1,2,3,4,5,6,7,8]
 
     def render(self, ax = None, save_path = ''):
         def get_start_y_and_height(index):
@@ -194,308 +215,69 @@ class BuildingCard(Card):
         if save_path != '':
             plt.savefig(save_path, dpi=100, bbox_inches='tight') 
 
+    def str_render(self):
+        print(self.name + ', max p: ' + str(self.max_players))
+        for y in self.y_values[::-1]:
+            y_str = str(y)
+            if y <= 9:
+                y_str += ' '
+            for x in self.x_values:
+                if x in self.values and y in self.values[x]:
+                    y_str += ' | ' + str(self.values[x][y])
+                else:
+                    y_str += ' |  '
+            y_str += ' |'
+            print(y_str)
+            ln_str = '   '
+            for x in self.x_values:
+                ln_str += '----'
+            print(ln_str)
+        x_str = '  '
+        for x in self.x_values:
+            x_str += '   ' + str(x)
+        print(x_str)
+
     def __str__(self):
-        if self.card_type == 'buy_card':
-            return 'BM'
-        elif  self.card_type == 'sell_card':
-            return 'SM'
-        elif  self.card_type == 'buy_process_card':
-            return 'BP'
-        elif  self.card_type == 'sell_process_card':
-            return 'SP'
+        if self.card_type == 'buy_market':
+            return 'B'
+        elif  self.card_type == 'sell_market':
+            return 'S'
+        elif self.card_type == 'process':
+            return 'P'
+        elif self.card_type == 'none':
+            return '-'
         return ''
     
 class BoardCard(Card):
-    def __init__(self, name = '', card_type = '', max_emps = 3):
+    def __init__(self, name = '', card_type = '', max_employees = 3):
         super().__init__(name, card_type)
-        self.max_emps = max_emps
+        self.max_employees = max_employees
     
     def __str__(self):
         if self.card_type == 'farm':
-            return 'F' + str(self.max_emps)
+            return 'F' + str(self.max_employees)
         elif self.card_type == 'commerce':
-            return 'C' + str(self.max_emps)
+            return 'C' + str(self.max_employees)
         elif self.card_type == 'industry':
-            return 'I' + str(self.max_emps)
+            return 'I' + str(self.max_employees)
         elif self.card_type == 'residential':
-            return 'R' + str(self.max_emps)
+            return 'R' + str(self.max_employees)
         return ''
-
-class Company:
-    def __init__(self, game_settings, market):
-        self.game_settings = game_settings
-        self.market = market
-        self.employees = []
-        self.buildings = []
-        self.current_price = 5
-        self.capital = game_settings.player_starting_cap
-        
-        # mapping cards
-        #prices, markets = [4,5,6,7,8], [1,2,3,4,5]
-        #self.product_mapping = MappingCard(name = 'Product', x_name = 'Brand', y_name = 'Price', x_values = [1,2,3,4,5], y_values = prices, type = 'product', max_output = 5)
-        #self.demand_mapping = MappingCard(name = 'Demand: P', x_name = 'Product', y_name = 'Market', x_values = [1,2,3,4,5], y_values = markets, type = 'demand', max_output = 5)
-        #self.unit_cost_mapping = MappingCard(name = 'Unit Cost', x_name = 'Ops', y_name = 'Market', x_values = [1,2,3,4,5], y_values = markets, type = 'unit_cost', max_output = 5)
-        #self.unit_profit_mapping = MappingCard(name = 'Unit Profit', x_name = 'Unit Cost', y_name = 'Price', x_values = [1,2,3,4,5], y_values = prices, type = 'unit_profit', max_output = 5)
-    
-    def hire_employee(self, employee, sign_on_bonus = 0):
-        self.capital -= sign_on_bonus
-        self.employees.append(employee)
-
-    def rent_building(self, building, deposit = 0):
-        self.capital -= deposit
-        self.buildings.append(building)
-
-    def get_hand_dic(self, employee_cards = None, building_cards = None, price = None):
-        emps = employee_cards if employee_cards != None else self.employees
-        buds = building_cards if building_cards != None else self.buildings
-        sel_prc = price if price != None else self.current_price
-
-        operations, engineering, finance, marketing, employee_cost = self.get_employee_attributes(emps)
-        production, storage, desks, building_cost = self.get_building_attributes(buds)
-        no_fac = int(production / self.game_settings.factory_to_prod)
-        no_off = int(desks / self.game_settings.office_to_desk)
-        return {'ops':operations, 'fin':finance, 'eng':engineering, 'mkt':marketing, 'dsk':desks, 'prd':production, 'prc':sel_prc}
-    
-    def analyse_game_state(self, hand_key, market_strength, total_desirability = -1, debug = 0):
-        ops_emp, fin_emp, eng_emp, mkt_emp, no_off, no_fac, sel_prc = hand_key
-        base_emp_val = self.game_settings.base_emp_value
-        ops_emp = int(ops_emp / base_emp_val)
-        fin_emp = int(fin_emp / base_emp_val)
-        eng_emp = int(eng_emp / base_emp_val)
-        mkt_emp = int(mkt_emp / base_emp_val)
-        emps_cards, buds_cards = [], []
-        
-        base_emp_cost = self.game_settings.base_emp_cost
-        for i in range(ops_emp):
-            emps_cards.append(EmployeeCard(base_emp_val, 0, 0, 0, base_emp_cost))
-        for i in range(fin_emp):
-            emps_cards.append(EmployeeCard(0, base_emp_val, 0, 0, base_emp_cost))
-        for i in range(eng_emp):
-            emps_cards.append(EmployeeCard(0, 0, base_emp_val, 0, base_emp_cost))
-        for i in range(mkt_emp):
-            emps_cards.append(EmployeeCard(0, 0, 0, base_emp_val, base_emp_cost))
-        for i in range(no_fac):
-            val = self.game_settings.factory_to_prod
-            cost = self.game_settings.factory_cost
-            buds_cards.append(BuildingCard(val, 0, 0, cost))
-        for i in range(no_off):
-            val = self.game_settings.office_to_desk
-            cost = self.game_settings.office_cost
-            buds_cards.append(BuildingCard(0, 0, val, cost))
-        net = self.calculate_net(emps_cards, buds_cards, sel_prc, market_strength, total_desirability, debug)
-        return net
-
-    def get_employee_attributes(self, employees):
-        operations, engineering, finance, marketing, cost = 0, 0, 0, 0, 0
-        for employee in employees:
-            operations += employee.operations
-            engineering += employee.engineering
-            finance += employee.finance
-            marketing += employee.marketing
-            cost += employee.cost
-        return operations, engineering, finance, marketing, cost
-    
-    def get_building_attributes(self, buildings):
-        production, storage, desks, cost = 0, 0, 0, 0
-        for building in buildings:
-            production += building.production
-            storage += building.storage
-            desks += building.desks
-            cost += building.cost
-        return production, storage, desks, cost
-    
-    def calculate_desirability(self, employees, price, debug = 0):
-        operations, engineering, finance, marketing, employee_cost = self.get_employee_attributes(employees)
-        brand = 0
-        if marketing in self.game_settings.marketing_to_brand:
-            brand = self.game_settings.marketing_to_brand[marketing]
-        else:
-            brand = max(self.game_settings.marketing_to_brand.values())
-        if price in self.game_settings.price_to_price_des:
-            price_desirability = self.game_settings.price_to_price_des[price]
-        else:
-            if debug:
-                print('invalid company: price is not allowed')
-            return False, 0
-
-        price_des_plus_brand = brand + price_desirability
-        if price_des_plus_brand in self.game_settings.price_des_plus_brand_to_desirability:
-            desirability = self.game_settings.price_des_plus_brand_to_desirability[price_des_plus_brand]
-        else:
-            if debug:
-                print('invalid company: price desirabilty or brand is invalid')
-            return False, 0
-        
-        return True, desirability
-
-    def calculate_desirability_new(self, employees, price = None, market_strength = None, debug = 0):
-        if price == None:
-            price = self.current_price
-        if market_strength == None:
-            market_strength = self.market
-        operations, engineering, finance, marketing, employee_cost = self.get_employee_attributes(employees)
-        product_strength = self.product_mapping.get_value(marketing, price)
-        desirability = self.demand_mapping.get_value(product_strength, market_strength)
-        return True, desirability
-
-    def calculate_net(self, employees, buildings, price, market_strength, total_desirability, debug = 0):
-        operations, engineering, finance, marketing, employee_cost = self.get_employee_attributes(employees)
-        production, storage, desks, building_cost = self.get_building_attributes(buildings)
-        total_cost = employee_cost + building_cost
-
-        # mapping
-        unit_cost, brand, max_gross, max_buildings = 0, 0, 0, 0
-        if operations in self.game_settings.operations_to_max_buildings:
-            max_buildings = self.game_settings.operations_to_max_buildings[operations]
-        else:
-            max_buildings = max(self.game_settings.operations_to_max_buildings.values())
-            
-        if marketing in self.game_settings.marketing_to_brand:
-            brand = self.game_settings.marketing_to_brand[marketing]
-        else:
-            brand = max(self.game_settings.marketing_to_brand.values())
-            
-        if finance in self.game_settings.finance_to_max_gross:
-            max_gross = self.game_settings.finance_to_max_gross[finance]
-        else:
-            max_gross = max(self.game_settings.finance_to_max_gross.values())
-            
-        if engineering in self.game_settings.engineering_to_unit_cost:
-            unit_cost = self.game_settings.engineering_to_unit_cost[engineering]
-        else:
-            unit_cost = max(self.game_settings.engineering_to_unit_cost.values())
-        
-        # check these are valid combinations
-        if len(buildings) > max_buildings:
-            if debug:
-                print('invalid company: too many buildings: ' + str(len(buildings)) + ', max buildings: ' + str(max_buildings))
-            return False, 0
-        
-        if price in self.game_settings.price_to_price_des:
-            price_desirability = self.game_settings.price_to_price_des[price]
-        else:
-            if debug:
-                print('invalid company: price is not allowed')
-            return False, 0
-        
-        if len(employees) > desks:
-            if debug:
-                print('invalid company: too many employees: ' + str(len(employees)) + ', desks: ' + str(desks))
-            return False, 0
-        
-        # product desirability (brand + price desirability -> desirability)
-        price_des_plus_brand = price_desirability + brand  # 2,3,4,5,6,7,8,9,10
-        if price_des_plus_brand in self.game_settings.price_des_plus_brand_to_desirability:
-            desirability = self.game_settings.price_des_plus_brand_to_desirability[price_des_plus_brand]
-        else:
-            if debug:
-                print('invalid company: price desirabilty or brand is invalid')
-            return False, 0
-        
-        # calculate demand (desirability -> demand)
-        if total_desirability == -1:
-            total_desirability = desirability # this is the test case or a single player game
-        
-        demand = self.market.get_player_demand(market_strength, total_desirability, desirability, False)
-        units_sold = min([production, demand])
-        unit_profit = price - unit_cost
-        potential_gross = units_sold * unit_profit
-        actual_gross = min([potential_gross, max_gross])
-        net = actual_gross - total_cost
-        if debug:
-            print(' ---- A. max buildings: ' + str(max_buildings) + ', max employees: ' + str(desks) + ', max gross: ' + str(max_gross))
-            print(' ---- B. (price desirability: ' + str(price_desirability) + ' + brand desirability: ' + str(brand) + ') -> desirability: ' + str(desirability))
-            print(' ---- C. market strength: ' + str(market_strength) + ' -> total desirability: ' + str(total_desirability) + ' -> desirability: ' + str(desirability) + ' -> player demand: ' + str(demand) + '/' + str(production))
-            print(' ---- D. (price: ' + str(price) + ' - unit cost: ' + str(unit_cost) + ') = unit profit: ' + str(unit_profit) + ' x units sold: ' + str(units_sold) + ' = potential gross: ' + str(potential_gross) + '/' + str(max_gross))
-            print(' ---- E. (actual gross: ' + str(actual_gross) + ' - total cost: ' + str(total_cost) +  ') = net income: ' + str(net))
-            
-        return True, int(net)
-
-    def calculate_net_new(self, employees, buildings, price = None, market_strength = None, total_demand = None, debug = 0):
-        if price == None:
-            price = self.current_price
-        if market_strength == None:
-            market_strength = self.market
-
-        operations, engineering, finance, marketing, employee_cost = self.get_employee_attributes(employees)
-        production, storage, desks, building_cost = self.get_building_attributes(buildings)
-        total_cost = employee_cost + building_cost
-
-        # company properties
-        product_strength = self.product_mapping.get_value(marketing, price)
-        demand = self.demand_mapping.get_value(product_strength, market_strength)
-        unit_cost = self.unit_cost_mapping.get_value(engineering, market_strength)
-        unit_profit = self.unit_profit_mapping.get_value(unit_cost, price)
-
-        # maxes
-        unit_cost, max_gross, max_buildings = 0, 0, 0
-        if operations in self.game_settings.operations_to_max_buildings:
-            max_buildings = self.game_settings.operations_to_max_buildings[operations]
-        else:
-            max_buildings = max(self.game_settings.operations_to_max_buildings.values())
-            
-        if len(buildings) > max_buildings:
-            if debug:
-                print('invalid company: too many buildings: ' + str(len(buildings)) + ', max buildings: ' + str(max_buildings))
-            return False, 0
-        if len(employees) > desks:
-            if debug:
-                print('invalid company: too many employees: ' + str(len(employees)) + ', desks: ' + str(desks))
-            return False, 0
-
-        if finance in self.game_settings.finance_to_max_gross:
-            max_gross = self.game_settings.finance_to_max_gross[finance]
-        else:
-            max_gross = max(self.game_settings.finance_to_max_gross.values())
-        
-        if total_demand == -1:
-            total_demand = demand # this is the test case or a single player game
-        
-        # this needs to change to use the new demand -> units sold mapping cards
-        units_sold = self.market.get_player_demand(market_strength, total_demand, demand, False)
-
-
-        potential_gross = demand * unit_profit
-        actual_gross = min([potential_gross, max_gross])
-        net = actual_gross - total_cost
-        if debug:
-            print(' ---- A. max buildings: ' + str(max_buildings) + ', max employees: ' + str(desks) + ', max gross: ' + str(max_gross))
-            print(' ---- B. (marketing: ' + str(marketing) + ' -> price: ' + str(price) + ' -> product strength: ' + str(product_strength))
-            print(' ---- C. product strength: ' + str(product_strength) + ' -> market strength: ' + str(market_strength) + ' -> demand: ' + str(demand) + ' -> total demand: ' + str(total_demand) + ' -> unit sold: ' + str(units_sold))
-            print(' ---- D. (price: ' + str(price) + ' - unit cost: ' + str(unit_cost) + ') = unit profit: ' + str(unit_profit) + ' x units sold: ' + str(units_sold) + ' = potential gross: ' + str(potential_gross) + '/' + str(max_gross))
-            print(' ---- E. (actual gross: ' + str(actual_gross) + ' - total cost: ' + str(total_cost) +  ') = net income: ' + str(net))
-            
-        return True, int(net)
-    
-    def render(self):
-        fig, axs = plt.subplots(2, 2)
-        fig.set_figwidth(6)
-        fig.set_figheight(6)
-        fig.suptitle('Player Company') # or plt.suptitle('Main title')
-        self.product_mapping.render(ax = axs[0][0])
-        self.demand_mapping.render(ax = axs[1][0])
-        self.unit_profit_mapping.render(ax = axs[0][1])
-        self.unit_cost_mapping.render(ax = axs[1][1])
 
 class Settings:
     def __init__(self, 
                  base_emp_value = 1,
                  emp_cost = 1,
                  bud_cost = 1,
-                 no_players_to_board_size = {1:16, 2:20, 3:24, 4:28},
-                 no_players_to_no_sell_cards = {1:4, 2:4, 3:6, 4:8},
-                 no_players_to_no_commerce_cards = {1:4, 2:5, 3:6, 4:7},
-                 no_players_to_no_industry_cards = {1:4, 2:5, 3:6, 4:7},
+                 no_players_to_board_size = {1:12, 2:16, 3:20, 4:24},
+                 no_players_to_no_industry_cards = {1:4, 2:6, 3:8, 4:10},
                  no_players_to_no_farm_cards = {1:4, 2:5, 3:6, 4:7},
                  no_players_to_no_residential_cards = {1:4, 2:5, 3:6, 4:7},
-                 hq_allowed_on = ['commerce','industry'],
-                 weak_buy_market_allowed_on = ['commerce','farm'],
-                 strong_buy_market_allowed_on = ['farm'],
-                 weak_sell_market_allowed_on = ['commerce','residential'],
-                 strong_sell_market_allowed_on = ['residential'],
+                 hq_allowed_on = ['industry', 'residential', 'farm'],
+                 buy_market_allowed_on = ['farm'],
+                 sell_market_allowed_on = ['residential'],
                  process_allowed_on = ['industry'],
 
-                 no_players_to_no_buy_cards = {1:4, 2:4, 3:6, 4:8},
                  player_starting_cap = 10,
                  no_of_turns_in_game = 12,
                  buy_card_name = 'Wheat Market',
@@ -513,19 +295,14 @@ class Settings:
         # deck properties
 
         self.no_players_to_board_size = no_players_to_board_size
-        self.no_players_to_no_sell_cards = no_players_to_no_sell_cards
-        self.no_players_to_no_buy_cards = no_players_to_no_buy_cards
 
-        self.no_players_to_no_commerce_cards = no_players_to_no_commerce_cards
         self.no_players_to_no_industry_cards = no_players_to_no_industry_cards
         self.no_players_to_no_farm_cards = no_players_to_no_farm_cards
         self.no_players_to_no_residential_cards = no_players_to_no_residential_cards
 
         self.hq_allowed_on = hq_allowed_on
-        self.weak_buy_market_allowed_on = weak_buy_market_allowed_on
-        self.strong_buy_market_allowed_on = strong_buy_market_allowed_on
-        self.weak_sell_market_allowed_on = weak_sell_market_allowed_on
-        self.strong_sell_market_allowed_on = strong_sell_market_allowed_on
+        self.buy_market_allowed_on = buy_market_allowed_on
+        self.sell_market_allowed_on = sell_market_allowed_on
         self.process_allowed_on = process_allowed_on
 
         # player properties
@@ -540,12 +317,8 @@ class Settings:
         self.process_card_name = process_card_name
 
 class Player:
-    def __init__(self, game_settings, company):
+    def __init__(self, game_settings):
         self.game_settings = game_settings
-
-        self.company = company
-        self.no_emp_cards_in_pool = game_settings.no_emp_cards_in_pool
-        self.no_bud_cards_in_pool = game_settings.no_bud_cards_in_pool
 
     def find_move(self, player_no,company, available_employees, available_buildings, market_strength, other_players_des = -1, debug = 0):
         test_emp_idx_combos = self.generate_move_combinations(len(available_employees)) # hire up to two employees per turn
@@ -673,48 +446,76 @@ class Player:
         
         return df
 
-class Market:
-    def __init__(self, game_settings):
-        self.game_settings = game_settings
-
-        self.min_market_strength = 1
-        self.current_strength = game_settings.starting_market_strength
-        self.max_market_strength = 4
-
-    def apply_market_move(self, market_move):
-        self.current_strength = max([self.min_market_strength, min([self.max_market_strength, self.current_strength + market_move])])
-
 class Board:
-    def __init__(self, game_settings, no_players, cards, style = 'rectangle'):
+    def __init__(self, game_settings, no_players, shuffle = True, style = 'rectangle'):
         self.game_settings = game_settings
         self.no_players = no_players
-        self.size = game_settings.no_players_to_board_size[no_players]
-        if self.size != len(cards):
-            raise Exception('Board Error: board size does not match number of cards')
         self.style = style
-        self.cards = cards
-        self.array = self.gen_board(self.size, style)
-        self.location_to_card_index, self.card_index_to_location = self.gen_board_indices(self.array)
+
+        self.size = game_settings.no_players_to_board_size[no_players]
+        self.cards = self.gen_all_board_cards(game_settings, no_players, shuffle)
+        if self.size != len(self.cards):
+            raise Exception('Board Error: board size does not match number of cards')
+        
+        self.mask = self.gen_mask(self.size, style)
+        self.location_to_card_index, self.card_index_to_location = self.gen_board_indices(self.mask)
+        self.card_array = self.gen_card_array(self.mask, self.location_to_card_index, self.cards)
+        
+        self.player_bud_arrays, self.player_emp_arrays = self.gen_player_arrays(no_players, self.mask)
+        self.player_buy_prices, self.player_sell_prices = [1] * no_players, [2] * no_players
         
     def __str__(self):
         s = ''
-        for r in range(len(self.array)):
+        for r in range(len(self.mask)):
             s2 = ''
-            for c in range(len(self.array[0])):
+            for c in range(len(self.mask[0])):
                 card_str = '| '
-                if self.array[r][c] == 1:
+                if self.mask[r][c] == 1:
                     card_index = self.location_to_card_index[(r,c)]
                     card_str += str(self.cards[card_index])
+                    for p in range(self.no_players):
+                        card_str += ' ' + str(self.player_bud_arrays[p][r][c])
+                        card_str += str(self.player_emp_arrays[p][r][c])
                 else:
                     card_str += '  '
+                    for p in range(self.no_players):
+                        card_str += '   '
                 card_str += ' |'
                 s2 += card_str
             
             s += s2 + '\n'
             s = s.replace('||', '|').replace('  |  ', '     ')
         return s
+    
+    def render(self):
+        fig, axs = plt.subplots(self.board_size, self.board_size)
+        fig.set_figwidth(3.5 * self.board_size)
+        fig.set_figheight(3.5 * self.board_size)
+        for i in range(self.board_size):
+            for j in range(self.board_size):
+                self.board[i][j].render(ax = axs[i][j])
 
-    def gen_board(self, size, style):
+    def gen_all_board_cards(self, game_settings, no_players, shuffle = True):
+        # board cards
+        no_farm_cards = game_settings.no_players_to_no_farm_cards[no_players]
+        no_residential_cards = game_settings.no_players_to_no_residential_cards[no_players]
+        no_industry_cards = game_settings.no_players_to_no_industry_cards[no_players]
+        farm_cards = self.gen_board_cards(no_farm_cards, 'Farm', 'farm', 4)
+        residential_cards = self.gen_board_cards(no_residential_cards, 'Residential', 'residential', 4)
+        industry_cards = self.gen_board_cards(no_industry_cards, 'Industry', 'industry', 4)
+        board_cards = farm_cards + residential_cards + industry_cards
+        if shuffle:
+            board_cards = Deck(board_cards).shuffle()
+
+        return board_cards
+
+    def gen_board_cards(self, count, name, card_type, max_employees):
+        cards = []
+        for i in range(count):
+            cards.append(BoardCard(name = name, card_type = card_type, max_employees = max_employees))
+        return cards
+ 
+    def gen_mask(self, size, style):
         if size not in [12,16,20,24,28,32,36]:
             raise Exception('board size not supported')
         if style not in  ['rectangle','diamond','linear']:
@@ -784,15 +585,155 @@ class Board:
                     location_to_card_index[(r,c)] = card_index
                     card_index += 1
         return location_to_card_index, card_index_to_location
-     
-    def render(self):
-        fig, axs = plt.subplots(self.board_size, self.board_size)
-        fig.set_figwidth(3.5 * self.board_size)
-        fig.set_figheight(3.5 * self.board_size)
-        for i in range(self.board_size):
-            for j in range(self.board_size):
-                self.board[i][j].render(ax = axs[i][j])
 
+    def gen_card_array(self, mask, location_to_card_index, cards):
+        card_array = np.zeros((len(mask), len(mask[0]))).tolist()
+        for r in range(len(mask)):
+            for c in range(len(mask[0])):
+                if mask[r][c] == 1:
+                    card_array[r][c] = cards[location_to_card_index[(r,c)]]
+                else:
+                    card_array[r][c] = None
+        return card_array
+
+    def gen_player_arrays(self, no_players, board_array):
+        player_bud_arrays, player_emp_arrays = [], []
+        for p in range(no_players):
+            #create an array for each player the same size as the board
+            bud_arr = np.zeros((len(board_array), len(board_array[0]))).tolist()
+            emp_arr = np.zeros((len(board_array), len(board_array[0]))).tolist()
+
+            for i in range(len(board_array)):
+                for j in range(len(board_array[0])):
+                    bud_arr[i][j], emp_arr[i][j] = None, None
+                    if board_array[i][j] == 1:
+                        bud_arr[i][j], emp_arr[i][j] = BuildingCard('None', 'none', max_players=4), 0
+            player_bud_arrays.append(bud_arr)
+            player_emp_arrays.append(emp_arr)
+
+        return player_bud_arrays, player_emp_arrays
+
+    def calc_player_net(self, player_ind):
+        sum_buy, sum_process, sum_sell, tot_buds, tot_emps = 0, 0, 0, 0, 0
+        player_buy_price = self.player_buy_prices[player_ind]
+        player_sell_price = self.player_sell_prices[player_ind]
+
+        for ind in self.card_index_to_location:
+            i = self.card_index_to_location[ind][0]
+            j = self.card_index_to_location[ind][1]
+            card = self.player_bud_arrays[player_ind][i][j]
+            tot_price = 0
+
+            # player emps on current card
+            curr_emp = self.player_emp_arrays[player_ind][i][j]
+            tot_emps += curr_emp
+            if card.card_type in ['buy_market','sell_market','process','hq']:
+                tot_buds += 1
+            
+            if card.card_type == 'buy_market':
+                for p in range(self.no_players):
+                    if self.player_bud_arrays[p][i][j].card_type == 'buy_market':
+                        tot_price += self.player_buy_prices[p]
+                sum_buy += card.get_value(player_buy_price, tot_price) + curr_emp
+            elif card.card_type == 'sell_market':
+                for p in range(self.no_players):
+                    if self.player_bud_arrays[p][i][j].card_type == 'sell_market':
+                        tot_price += self.player_sell_prices[p]
+                sum_sell += card.get_value(player_sell_price, tot_price) + curr_emp
+            elif card.card_type == 'process':
+                connected_buy_cards, connected_sell_cards = 0, 0
+                connected_inds = [(i-1,j),(i,j+1),(i+1,j),(i,j-1)]
+                for conn_ind in connected_inds:
+                    ii, jj = conn_ind[0], conn_ind[1]
+                    if ii >= 0 and jj >= 0 and ii < len(self.mask) and jj < len(self.mask[0]):
+                        if self.player_bud_arrays[player_ind][ii][jj] != None:
+                            if self.player_bud_arrays[player_ind][ii][jj].card_type == 'buy_market':
+                                connected_buy_cards += 1
+                            elif self.player_bud_arrays[player_ind][ii][jj].card_type == 'sell_market':
+                                connected_sell_cards += 1
+                sum_process += card.get_value(connected_buy_cards, connected_sell_cards) + curr_emp
+            elif card.card_type == 'hq':
+                pass        
+            elif card.card_type == 'none':
+                pass
+        units = min(sum_buy, sum_process, sum_sell)
+        net = units * (player_sell_price - player_buy_price) - tot_buds - tot_emps
+
+        print('sum buy: ' + str(sum_buy) + ' | sum process: ' + str(sum_process) + ' | sum sell: ' + str(sum_sell))
+        print('tot buds: ' + str(tot_buds) + ' | tot emps: ' + str(tot_emps) + ' | tot cost: ' + str(tot_buds + tot_emps))
+        print('units: ' + str(units) + ' | player sell price: ' + str(player_sell_price) + ' | player buy price: ' + str(player_buy_price) + ' | net: ' + str(net))
+
+        return net
+        
+    def add_building(self, player_ind, building_card, row, col):
+        # check if location is valid
+        if self.mask[row][col] == 0:
+            print('invalid location for building card')
+            return False
+        
+        # check if building is allowed on board card
+        board_card = self.card_array[row][col]
+        if board_card.card_type not in building_card.allowed_board_cards:
+            print('invalid building card: ' + str(building_card.card_type) + ' | on board card: ' + str(board_card.card_type))
+            return False
+        
+        # check if other player has a building on location
+        p_count_on_location = 0
+        for p in range(self.no_players):
+            if self.player_bud_arrays[p][row][col] != None and self.player_bud_arrays[p][row][col].card_type != 'none':
+                p_count_on_location += 1
+
+        # check existing building card max players and that new card is correct type
+        for p in range(self.no_players):
+            if p != player_ind and self.player_bud_arrays[p][row][col] != None and self.player_bud_arrays[p][row][col].card_type != 'none':
+                existing_bud_card = self.player_bud_arrays[p][row][col]
+                if existing_bud_card.max_players == p_count_on_location:
+                    print('board card already has max players')
+                    return False
+                elif existing_bud_card.card_type != building_card.card_type:
+                    print('building needs to match existing building card type')
+                    return False
+        
+        self.player_bud_arrays[player_ind][row][col] = building_card
+        return True
+        
+    def add_employee(self, player_ind, row, col):
+        if self.mask[row][col] == 0:
+            print('invalid location for adding an employee')
+            return False
+        
+        # check if player has building on location
+        if self.player_bud_arrays[player_ind][row][col] == None or self.player_bud_arrays[player_ind][row][col].card_type == 'none':
+            print('no building on location')
+            return False
+
+        # count current emps
+        board_card, curr_emps = self.card_array[row][col], 0
+        for p in range(self.no_players):
+            curr_emps += self.player_emp_arrays[p][row][col]
+
+        if curr_emps >= board_card.max_employees:
+            print('no space for an additional emp')
+            return False
+        else:
+            self.player_emp_arrays[player_ind][row][col] += 1
+
+    def change_buy_price(self, player_ind, price):
+        # check price is valid
+        if price not in [1,2,3,4]:
+            print('invalid buy price')
+            return False
+        self.player_buy_prices[player_ind] = price
+        return True
+    
+    def change_sell_price(self, player_ind, price):
+        # check price is valid
+        if price not in [2,3,4,5]:
+            print('invalid sell price')
+            return False
+        self.player_sell_prices[player_ind] = price
+        return True
+    
 class Game:
     def __init__(self, game_settings, no_players, board_style = 'rectangle',theme = 'theme_0', shuffle = True, debug = 0):
         self.asset_path = join('assets', theme)
@@ -802,32 +743,23 @@ class Game:
         self.turn_number = 0
 
         # building cards - this is a deck that will be taken from arbitrarily
-        self.weak_buy_market_cards = self.gen_building_cards(100, game_settings.buy_card_name, 'weak_buy_market', game_settings.weak_buy_market_allowed_on, 'Total Spend', 'Player Spend', [2,3,4,5,6,7,8], [1,2,3,4], 2, 5)
-        self.strong_buy_market_cards = self.gen_building_cards(100, game_settings.buy_card_name, 'strong_buy_market', game_settings.strong_buy_market_allowed_on, 'Total Spend', 'Player Spend', [2,3,4,5,6,7,8], [1,2,3,4], 2, 7)
-        self.weak_sell_market_cards = self.gen_building_cards(100, game_settings.sell_card_name, 'weak_sell_market', game_settings.weak_sell_market_allowed_on, 'Total Price', 'Player Price', [4,5,6,7,8,9,10], [2,3,4,5,4], 2, 5)
-        self.strong_sell_market_cards = self.gen_building_cards(100, game_settings.sell_card_name, 'strong_sell_market', game_settings.strong_sell_market_allowed_on, 'Total Price', 'Player Price', [4,5,6,7,8,9,10], [2,3,4,5,4], 2, 7)
-        self.process_cards = self.gen_building_cards(100, game_settings.process_card_name, 'process', game_settings.process_allowed_on, 'Connected ' + game_settings.buy_card_name, 'Connected ' + game_settings.sell_card_name, [0,1,2], [0,1,2], 1, 10)
-        self.hq_cards = self.gen_building_cards(100, 'HQ', 'hq', game_settings.hq_allowed_on, 'Max Buildings', 'Max Employees', [0,3,6,9], [0,3,6,9], 1, 5)
+        buy_market_cards = self.gen_building_cards(100, game_settings.buy_card_name, 'buy_market', game_settings.buy_market_allowed_on, 'Total Spend', 'Player Spend', 2, 5)
+        sell_market_cards = self.gen_building_cards(100, game_settings.sell_card_name, 'sell_market', game_settings.sell_market_allowed_on, 'Total Price', 'Player Price', 2, 5)
+        process_cards = self.gen_building_cards(100, game_settings.process_card_name, 'process', game_settings.process_allowed_on, 'Connected ' + game_settings.buy_card_name, 'Connected ' + game_settings.sell_card_name, 1, 10)
+        hq_cards = self.gen_building_cards(100, 'HQ', 'hq', game_settings.hq_allowed_on, 'Max Buildings', 'Max Employees', 1, 5)
         
-        # board cards
-        no_farm_cards = game_settings.no_players_to_no_farm_cards[no_players]
-        no_residential_cards = game_settings.no_players_to_no_residential_cards[no_players]
-        no_commerce_cards = game_settings.no_players_to_no_commerce_cards[no_players]
-        no_industry_cards = game_settings.no_players_to_no_industry_cards[no_players]
-        farm_cards = self.gen_board_cards(no_farm_cards, 'Farm', 'farm', 4)
-        residential_cards = self.gen_board_cards(no_residential_cards, 'Residential', 'residential', 4)
-        commerce_cards = self.gen_board_cards(no_commerce_cards, 'Commerce', 'commerce', 4)
-        industry_cards = self.gen_board_cards(no_industry_cards, 'Industry', 'industry', 4)
-        board_cards = farm_cards + residential_cards + commerce_cards + industry_cards
-        if shuffle:
-            board_cards = Deck(board_cards).shuffle()
-        
+        self.building_cards = {
+            'buy_market': buy_market_cards,
+            'sell_market': sell_market_cards,
+            'process': process_cards,
+            'hq': hq_cards
+        }
+
         # board
-        self.board = Board(game_settings, no_players, board_cards, board_style)
+        self.board = Board(game_settings, no_players, shuffle, board_style)
         
-        # set up game entities
-        #self.market = Market(game_settings)
-        #self.players = [Player(game_settings, self.companies[i]) for i in range(no_players)]
+        # players
+        self.players = [Player(game_settings) for i in range(no_players)]
 
     def run_turn(self, render = False, debug = 0):
         player_desirabilities, player_current_nets, new_player_desirabilities = [], [], []
@@ -923,16 +855,10 @@ class Game:
             print()
         self.turn_number += 1
         
-    def gen_board_cards(self, count, name, card_type, max_emps):
+    def gen_building_cards(self, count, name, card_type, allowed_on, x_name, y_name, max_players, max_output):
         cards = []
         for i in range(count):
-            cards.append(BoardCard(name = name, card_type = card_type, max_emps = max_emps))
-        return cards
-
-    def gen_building_cards(self, count, name, card_type, allowed_on, x_name, y_name, x_values, y_values, max_players, max_output):
-        cards = []
-        for i in range(count):
-            cards.append(BuildingCard(name = name, card_type = card_type, x_name = x_name, y_name = y_name, x_values = x_values, y_values = y_values, max_players = max_players, max_output = max_output))
+            cards.append(BuildingCard(name = name, card_type = card_type, x_name = x_name, y_name = y_name, max_players = max_players, max_output = max_output, allowed_board_cards = allowed_on))
         return cards
 
     def render_current_turn_cards(self, bud_cards):
