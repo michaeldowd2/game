@@ -1,17 +1,17 @@
-# Business Strategy Game
+# Business Strategy Board Game Concept
 
-A Python-based business simulation game where players compete to build and manage the most profitable company through strategic placement of buildings, employee management, and market operations.
+A competitive business simulation board game concept, programmed in python for balancing and configuration game parameters. Players compete to build and manage the most profitable company through strategic placement of buildings, employee management, and market operations.
 
 ## Features
 
 - Dynamic board generation with multiple layout styles (rectangle, diamond, linear)
-- Multiple player support
+- Players 2 - 4
 - Various building types:
   - Buy Markets: Purchase resources at competitive prices
-  - Sell Markets: Sell products to maximize profits
   - Processing Plants: Convert resources into products
+  - Sell Markets: Sell products to maximize profits
   - Headquarters: Manage operations and employees
-- Visual game state representation
+- Visual game state representation basic ai for balancing game parameters
 
 ## Installation
 
