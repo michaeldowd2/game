@@ -211,6 +211,8 @@ class BuildingCard(Card):
             return 'S'
         elif self.card_type == 'process':
             return 'P'
+        elif self.card_type == 'hq':
+            return 'H'
         elif self.card_type == 'none':
             return '-'
         return ''

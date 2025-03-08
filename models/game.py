@@ -176,3 +176,22 @@ class Game:
         ax.get_yaxis().set_ticks([])
         for spine in ax.spines.values():
             spine.set_visible(False)
+
+    def get_turn_building_cards(self, shuffle: bool = False, no_cards: int = 4) -> list[BuildingCard]:
+        """Get a list of building cards for the current turn.
+        
+        Args:
+            shuffle: Whether to shuffle the cards
+            no_cards: Number of cards to get
+        
+        Returns:
+            List of BuildingCard objects
+        """ 
+
+        cards = []
+        if not shuffle:
+            cards.append(self.building_cards['buy_market'][0])
+            cards.append(self.building_cards['sell_market'][0])
+            cards.append(self.building_cards['process'][0])
+            cards.append(self.building_cards['hq'][0])
+        return cards
