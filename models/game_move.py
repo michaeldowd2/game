@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple
 from models.board import Board
 from models.building_card import BuildingCard
+import copy
 
 @dataclass
 class GameMove:
@@ -16,6 +17,7 @@ class GameMove:
         employee_coordinate: Coordinate of employee
         sell_price_delta: Change in sell price
         buy_price_delta: Change in buy price
+        current_net: current player net
     """
     player_ind: int
     building_card: BuildingCard
@@ -24,7 +26,7 @@ class GameMove:
     employee_coordinate: Tuple[int, int]
     sell_price_delta: int
     buy_price_delta: int
-    
+
     def __post_init__(self):
         """Validate values after initialization."""
         #allowed_building_types = ['sell_market', 'process', 'buy_market', 'hq']
@@ -104,12 +106,12 @@ class GameMove:
         if self.employee_delta == 0:
             return True
         if board.mask[row][col] == 0:
-            print('invalid location for adding an employee')
+            #print('invalid location for adding an employee')
             return False
         
         # check if player has building on location
         if board.player_bud_arrays[self.player_ind][row][col] == None or board.player_bud_arrays[self.player_ind][row][col].card_type == 'none':
-            print('no building on location')
+            #print('no building on location')
             return False
 
         # count current emps
@@ -118,10 +120,10 @@ class GameMove:
             curr_emps += board.player_emp_arrays[p][row][col]
 
         if curr_emps + self.employee_delta >= board_card.max_employees:
-            print('no space for an additional emp')
+            #print('no space for an additional emp')
             return False
         elif curr_emps + self.employee_delta < 0:
-            print('no emps to remove')
+            #print('no emps to remove')
             return False
         else:
             return True
@@ -138,13 +140,18 @@ class GameMove:
 
         # check if location is valid
         if board.mask[row][col] == 0:
-            print('invalid location for building card')
+            #print('invalid location for building card')
+            return False
+
+        # check if player has a building at this location already
+        if board.player_bud_arrays[self.player_ind][row][col] != None and board.player_bud_arrays[self.player_ind][row][col].card_type != 'none':
+            #print('player already has a building on this location')
             return False
         
         # check if building is allowed on board card
         board_card = board.card_array[row][col]
         if board_card.card_type not in self.building_card.allowed_board_cards:
-            print('invalid building card: ' + str(self.building_card.card_type) + ' | on board card: ' + str(board_card.card_type))
+            #print('invalid building card: ' + str(self.building_card.card_type) + ' | on board card: ' + str(board_card.card_type))
             return False
         
         # check if other player has a building on location
@@ -158,19 +165,19 @@ class GameMove:
             if p != self.player_ind and board.player_bud_arrays[p][row][col] != None and board.player_bud_arrays[p][row][col].card_type != 'none':
                 existing_bud_card = board.player_bud_arrays[p][row][col]
                 if existing_bud_card.max_players == p_count_on_location:
-                    print('board card already has max players')
+                    #print('board card already has max players')
                     return False
                 elif existing_bud_card.card_type != self.building_card.card_type:
-                    print('building needs to match existing building card type')
+                    #print('building needs to match existing building card type')
                     return False
 
         return True
-
-    def _apply_move(self, board: Board) -> None:
+    
+    def apply(self, board: Board) -> Board:
         """Apply a move to the board.
         
         Args:
-            board: Board to apply move to
+            board: Board
         """
         if self.building_card != None and self.building_card.card_type != 'none':
             board.player_bud_arrays[self.player_ind][self.building_coordinate[0]][self.building_coordinate[1]] = self.building_card
@@ -183,3 +190,4 @@ class GameMove:
             
         if self.buy_price_delta != 0:
             board.player_buy_prices[self.player_ind] += self.buy_price_delta
+        return board

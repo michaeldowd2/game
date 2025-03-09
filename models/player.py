@@ -21,7 +21,7 @@ class Player:
         self.player_no = player_ind
         self.game_settings = game_settings
     
-    def find_move(self, board: Board, available_building_cards: List[BuildingCard], depth: int = 4) -> GameMove:
+    def find_best_move(self, board: Board, available_building_cards: List[BuildingCard], max_depth: int = 4, moves_to_try: int = -1, debug_level: int = 0, current_depth: int = 0) -> GameMove:
         """Find the optimal move sequence to maximize net income.
         
         Uses a look-ahead search to evaluate sequences of 4 moves and choose
@@ -29,53 +29,42 @@ class Player:
         
         Args:
             board: Current game board state
+            available_building_cards: List of available building cards
+            max_depth: Maximum depth of look-ahead search
+            moves_to_try: Number of moves to try
+            debug_level: Debug level
+            current_depth: Current depth of search
             
         Returns:
             The optimal GameMove or None if no valid move found
         """
-        best_move = None
-        best_net_income = float('-inf')
+        pstr = ''
+        for d in range(current_depth): pstr += '  ' 
+
+        if current_depth == max_depth:
+            show_net_calc = False
+            if debug_level > 1: show_net_calc = True
+
+            net = board.calc_player_net(self.player_no, show_net_calc)
+            if debug_level > 0: print('net: ' + str(net))
+            return None, net
         
-        # Generate all possible first moves
-        possible_moves = self._generate_possible_moves(board, available_building_cards)
-        
+        best_move, best_net_income = None, float('-inf')
+        all_possible_moves = self._generate_possible_moves(board, available_building_cards)
+        possible_moves = all_possible_moves[:moves_to_try] if moves_to_try > 0 else all_possible_moves
+
         for move in possible_moves:
-            # Simulate the move on a copy of the board
             board_copy = copy.deepcopy(board)
-            self._apply_move(board_copy, move)
-            
-            # Recursively evaluate sequences of 3 more moves
-            net_income = self._evaluate_move_sequence(board_copy, available_building_cards, depth -1)
+            move.apply(board_copy)
+            if debug_level > 0: print(pstr + str(current_depth) + '_move: ' + str(move))
+            if debug_level > 1: print(board_copy)
+            _, net_income = self.find_best_move(board_copy, available_building_cards, max_depth, moves_to_try, debug_level, current_depth + 1)
             
             if net_income > best_net_income:
                 best_net_income = net_income
                 best_move = move
                 
-        return best_move
-
-    def _evaluate_move_sequence(self, board: Board, available_building_cards: List[BuildingCard], depth: int) -> float:
-        """Recursively evaluate sequences of moves.
-        
-        Args:
-            board: Current board state
-            depth: Number of moves left to evaluate
-            
-        Returns:
-            Maximum net income achievable from this position
-        """
-        if depth == 0:
-            return board.calc_player_net(self.player_no)
-            
-        possible_moves = self._generate_possible_moves(board, available_building_cards)
-        best_net_income = float('-inf')
-        
-        for move in possible_moves:
-            board_copy = copy.deepcopy(board)
-            board_copy._apply_move(move)
-            net_income = self._evaluate_move_sequence(board_copy, depth - 1)
-            best_net_income = max(best_net_income, net_income)
-            
-        return best_net_income
+        return best_move, best_net_income
 
     def _generate_possible_moves(self, board: Board, available_building_cards: List[BuildingCard]) -> List[GameMove]:
         """Generate all possible valid moves from the current position.

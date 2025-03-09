@@ -230,7 +230,7 @@ class Board:
         emp_arrays = [[[0 for _ in range(width)] for _ in range(height)] for _ in range(no_players)]
         return bud_arrays, emp_arrays
 
-    def calc_player_net(self, player_ind):
+    def calc_player_net(self, player_ind, debug = False):
         sum_buy, sum_process, sum_sell, tot_buds, tot_emps = 0, 0, 0, 0, 0
         player_buy_price = self.player_buy_prices[player_ind]
         player_sell_price = self.player_sell_prices[player_ind]
@@ -276,10 +276,12 @@ class Board:
         units = min(sum_buy, sum_process, sum_sell)
         net = units * (player_sell_price - player_buy_price) - tot_buds - tot_emps
 
-        print('sum buy: ' + str(sum_buy) + ' | sum process: ' + str(sum_process) + ' | sum sell: ' + str(sum_sell))
-        print('tot buds: ' + str(tot_buds) + ' | tot emps: ' + str(tot_emps) + ' | tot cost: ' + str(tot_buds + tot_emps))
-        print('units: ' + str(units) + ' | player sell price: ' + str(player_sell_price) + ' | player buy price: ' + str(player_buy_price) + ' | net: ' + str(net))
+        if debug:
+            print('sum buy: ' + str(sum_buy) + ' | sum process: ' + str(sum_process) + ' | sum sell: ' + str(sum_sell))
+            print('tot buds: ' + str(tot_buds) + ' | tot emps: ' + str(tot_emps) + ' | tot cost: ' + str(tot_buds + tot_emps))
+            print('units: ' + str(units) + ' | player sell price: ' + str(player_sell_price) + ' | player buy price: ' + str(player_buy_price) + ' | net: ' + str(net))
 
         return net
         
+
 
