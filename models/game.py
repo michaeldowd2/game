@@ -193,5 +193,5 @@ class Game:
             cards.append(self.building_cards['buy_market'][0])
             cards.append(self.building_cards['sell_market'][0])
             cards.append(self.building_cards['process'][0])
-            cards.append(self.building_cards['hq'][0])
+            #cards.append(self.building_cards['hq'][0])
         return cards

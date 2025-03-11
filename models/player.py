@@ -21,7 +21,7 @@ class Player:
         self.player_no = player_ind
         self.game_settings = game_settings
     
-    def find_best_move(self, board: Board, available_building_cards: List[BuildingCard], max_depth: int = 4, moves_to_try: int = -1, debug_level: int = 0, current_depth: int = 0) -> GameMove:
+    def find_best_move(self, board: Board, available_building_cards: List[BuildingCard], max_depth: int = 4, moves_to_try: int = -1, debug_level: int = 0, current_depth: int = 0, current_count: int = 0) -> Tuple[GameMove, float, int]:
         """Find the optimal move sequence to maximize net income.
         
         Uses a look-ahead search to evaluate sequences of 4 moves and choose
@@ -37,6 +37,8 @@ class Player:
             
         Returns:
             The optimal GameMove or None if no valid move found
+            The net income of the best move sequence
+            The number of moves evaluated
         """
         pstr = ''
         for d in range(current_depth): pstr += '  ' 
@@ -47,7 +49,7 @@ class Player:
 
             net = board.calc_player_net(self.player_no, show_net_calc)
             if debug_level > 0: print('net: ' + str(net))
-            return None, net
+            return None, net, current_count
         
         best_move, best_net_income = None, float('-inf')
         all_possible_moves = self._generate_possible_moves(board, available_building_cards)
@@ -58,19 +60,20 @@ class Player:
             move.apply(board_copy)
             if debug_level > 0: print(pstr + str(current_depth) + '_move: ' + str(move))
             if debug_level > 1: print(board_copy)
-            _, net_income = self.find_best_move(board_copy, available_building_cards, max_depth, moves_to_try, debug_level, current_depth + 1)
+            _, net_income, current_count = self.find_best_move(board_copy, available_building_cards, max_depth, moves_to_try, debug_level, current_depth + 1, current_count+1)
             
             if net_income > best_net_income:
                 best_net_income = net_income
                 best_move = move
                 
-        return best_move, best_net_income
+        return best_move, best_net_income, current_count
 
     def _generate_possible_moves(self, board: Board, available_building_cards: List[BuildingCard]) -> List[GameMove]:
         """Generate all possible valid moves from the current position.
         
         Args:
             board: Current board state
+            available_building_cards: List of available building cards
             
         Returns:
             List of valid GameMove objects
@@ -79,13 +82,16 @@ class Player:
         
         # Try building placements
         for coords in board.card_index_to_location.values():
+            if board.player_mask_arrays[self.player_no][coords[0]][coords[1]] == 1:
+                continue
             for building_card in available_building_cards:
                 move = GameMove(
                     player_ind=self.player_no,
+                    move_type='build',
                     building_card=building_card,
                     building_coordinate=coords,
                     employee_delta=0,
-                    employee_coordinate=coords,
+                    employee_coordinate=(0,0),
                     sell_price_delta=0,
                     buy_price_delta=0
                 )
@@ -93,13 +99,15 @@ class Player:
                     moves.append(move)
 
         # Try employee changes
-        none_building_card = BuildingCard('None', 'none', max_players=4)
         for coords in board.card_index_to_location.values():
+            if board.player_mask_arrays[self.player_no][coords[0]][coords[1]] == 0:
+                continue
             for delta in [-1, 1]:
                 move = GameMove(
                     player_ind=self.player_no,
-                    building_card=none_building_card,
-                    building_coordinate=coords,
+                    move_type='employee',
+                    building_card=BuildingCard('None', 'none', max_players=4),
+                    building_coordinate=(0,0),
                     employee_delta=delta,
                     employee_coordinate=coords,
                     sell_price_delta=0,
@@ -109,21 +117,34 @@ class Player:
                     moves.append(move)
 
         # Try price changes
-        for sell_delta in [-1, 0, 1]:
-            for buy_delta in [-1, 0, 1]:
-                if sell_delta == 0 and buy_delta == 0:
-                    continue
-                move = GameMove(
-                    player_ind=self.player_no,
-                    building_card=none_building_card,
-                    building_coordinate=(0,0),
-                    employee_delta=0,
-                    employee_coordinate=(0,0),
-                    sell_price_delta=sell_delta,
-                    buy_price_delta=buy_delta
-                )
-                if move.validate_move(board):
-                    moves.append(move)
+        for sell_delta in [-1, 1]:
+            move = GameMove(
+                player_ind=self.player_no,
+                move_type='sell_price',
+                building_card=BuildingCard('None', 'none', max_players=4),
+                building_coordinate=(0,0),
+                employee_delta=0,
+                employee_coordinate=(0,0),
+                sell_price_delta=sell_delta,
+                buy_price_delta=0
+            )
+            if move.validate_move(board):
+                moves.append(move)
+
+        # Try price changes
+        for buy_delta in [-1, 1]:
+            move = GameMove(
+                player_ind=self.player_no,
+                move_type='buy_price',
+                building_card=BuildingCard('None', 'none', max_players=4),
+                building_coordinate=(0,0),
+                employee_delta=0,
+                employee_coordinate=(0,0),
+                sell_price_delta=0,
+                buy_price_delta=buy_delta
+            )
+            if move.validate_move(board):
+                moves.append(move)
 
         return moves
 

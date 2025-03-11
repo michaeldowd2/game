@@ -31,7 +31,7 @@ class Board:
         self.location_to_card_index, self.card_index_to_location = self.gen_board_indices(self.mask)
         self.card_array = self.gen_card_array(self.mask, self.location_to_card_index, self.cards)
         
-        self.player_bud_arrays, self.player_emp_arrays = self.gen_player_arrays(no_players, self.mask)
+        self.player_mask_arrays, self.player_bud_arrays, self.player_emp_arrays = self.gen_player_arrays(no_players, self.mask)
         self.player_buy_prices, self.player_sell_prices = [1] * no_players, [2] * no_players
 
     def __str__(self) -> str:
@@ -226,9 +226,10 @@ class Board:
             Tuple of arrays for buildings and employees
         """
         height, width = len(board_array), len(board_array[0])
+        mask_arrays = [[[0 for _ in range(width)] for _ in range(height)] for _ in range(no_players)]
         bud_arrays = [[[BuildingCard('None', 'none', max_players=4) for _ in range(width)] for _ in range(height)] for _ in range(no_players)]
         emp_arrays = [[[0 for _ in range(width)] for _ in range(height)] for _ in range(no_players)]
-        return bud_arrays, emp_arrays
+        return mask_arrays, bud_arrays, emp_arrays
 
     def calc_player_net(self, player_ind, debug = False):
         sum_buy, sum_process, sum_sell, tot_buds, tot_emps = 0, 0, 0, 0, 0

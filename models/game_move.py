@@ -20,6 +20,7 @@ class GameMove:
         current_net: current player net
     """
     player_ind: int
+    move_type: str
     building_card: BuildingCard
     building_coordinate: Tuple[int, int]
     employee_delta: int
@@ -32,7 +33,9 @@ class GameMove:
         #allowed_building_types = ['sell_market', 'process', 'buy_market', 'hq']
         #if self.building_type not in allowed_building_types:
         #    raise ValueError(f"building type must be one of {allowed_building_types}")
-        
+        if self.move_type not in ['build', 'employee', 'buy_price', 'sell_price']:
+            raise ValueError(f"move type must be one of {['build', 'employee', 'buy_price', 'sell_price']}")
+
         # players can only add or remove 1 employee per turn
         if self.employee_delta not in [-1,0,1]:
             raise ValueError(f"employee delta must be one of {-1,0,1}")
@@ -44,7 +47,7 @@ class GameMove:
         # players can only increase or decrease the buy price by one per turn
         if self.buy_price_delta not in [-1,0,1]:
             raise ValueError(f"buy price delta must be one of {-1,0,1}")
-
+        
     def __str__(self) -> str:
         out = f"P{self.player_ind}"
         out += f"B{self.building_card}{self.building_coordinate[0]}{self.building_coordinate[1]}"
@@ -69,13 +72,13 @@ class GameMove:
         """
         if self.building_card.card_type == 'none' and self.employee_delta == 0 and self.sell_price_delta == 0 and self.buy_price_delta == 0:
             return False # empty move
-        if not self.validate_building_placement(board, self.building_coordinate[0], self.building_coordinate[1]):
+        if self.move_type == 'build' and not self.validate_building_placement(board, self.building_coordinate[0], self.building_coordinate[1]):
             return False
-        if not self.validate_employee_delta(board, self.employee_coordinate[0], self.employee_coordinate[1]):
+        if self.move_type == 'employee' and not self.validate_employee_delta(board, self.employee_coordinate[0], self.employee_coordinate[1]):
             return False
-        if not self.validate_sell_price_delta(board):
+        if self.move_type == 'sell_price' and not self.validate_sell_price_delta(board):
             return False
-        if not self.validate_buy_price_delta(board):
+        if self.move_type == 'buy_price' and not self.validate_buy_price_delta(board):
             return False
 
         return True
@@ -181,6 +184,7 @@ class GameMove:
         """
         if self.building_card != None and self.building_card.card_type != 'none':
             board.player_bud_arrays[self.player_ind][self.building_coordinate[0]][self.building_coordinate[1]] = self.building_card
+            board.player_mask_arrays[self.player_ind][self.building_coordinate[0]][self.building_coordinate[1]] = 1
         
         if self.employee_delta != 0:
             board.player_emp_arrays[self.player_ind][self.employee_coordinate[0]][self.employee_coordinate[1]] += self.employee_delta
